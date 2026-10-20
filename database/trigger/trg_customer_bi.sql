@@ -2,12 +2,17 @@ DROP TRIGGER IF EXISTS trg_customer_bi;
 
 DELIMITER $$
 
--- Generate customer_id = 'CU' + running number (CU0001, CU0002, ...) when none is given
+-- 1) ISA is disjoint: a user cannot be both a customer and an admin.
+-- 2) Generate customer_id = 'CU' + running number (CU0001, CU0002, ...) when none is given.
 CREATE TRIGGER trg_customer_bi
 BEFORE INSERT ON customer
 FOR EACH ROW
 BEGIN
   DECLARE v_next INT;
+
+  IF EXISTS (SELECT 1 FROM admin WHERE username = NEW.username) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'This user is already an admin and cannot also be a customer';
+  END IF;
 
   IF NEW.customer_id IS NULL OR NEW.customer_id = '' THEN
     SELECT COALESCE(MAX(CAST(SUBSTRING(customer_id, 3) AS UNSIGNED)), 0) + 1

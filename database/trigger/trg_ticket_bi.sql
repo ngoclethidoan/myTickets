@@ -1,3 +1,5 @@
+DROP TRIGGER IF EXISTS trg_ticket_bi;
+
 DELIMITER $$
 
 CREATE TRIGGER trg_ticket_bi
@@ -15,36 +17,48 @@ BEGIN
   DECLARE v_cnt         INT;
   DECLARE v_next        INT;
 
-  -- Get event's info
+  -- Load event info
   SELECT venue_id, sale_time, start_time, standing_capacity
     INTO v_venue_event, v_sale, v_start, v_stand_cap
     FROM event WHERE event_id = NEW.event_id;
 
-  -- Check if event is on sale
+  -- Check: tickets can only be sold between sale_time and start_time
   IF NOW() < v_sale OR NOW() >= v_start THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Sale is over!';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ticket sales are not open for this event';
   END IF;
 
-  -- Check if the tickets order is pending
+  -- Check: tickets can only be added to a pending order (paid orders are locked)
   SELECT customer_id, status INTO v_customer, v_status
     FROM orders WHERE order_id = NEW.order_id;
   IF v_status <> 'pending' THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order must be pending';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tickets can only be added to a pending order';
   END IF;
 
-  -- Check zone: if is_standing
+  -- buy: the customer of the ticket is the customer who placed the order
+  IF NEW.customer_id IS NULL THEN
+    SET NEW.customer_id = v_customer;
+  ELSEIF NEW.customer_id <> v_customer THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ticket customer must be the customer of the order';
+  END IF;
+
+  -- Payment details are filled in only by pc_pay_order, when the order is paid
+  IF NEW.pay_method IS NOT NULL OR NEW.pay_date IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Payment details are set when the order is paid';
+  END IF;
+
+  -- Resolve zone: NULL seat_id means a standing ticket
   IF NEW.seat_id IS NULL THEN
     SET v_zone = 'STANDING';
   ELSE
     SELECT seat_zone, venue_id INTO v_zone, v_seat_venue
       FROM seat WHERE seat_id = NEW.seat_id;
-    -- 6. Ghế phải thuộc venue đang host event
+    -- Check: the seat must belong to the venue hosting the event
     IF v_seat_venue <> v_venue_event THEN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seat is not in the right venue!';
     END IF;
   END IF;
 
-  -- Check: 1 customer/1 type/1 eent
+  -- Check: max 2 tickets of the same zone per event per customer (pending + paid orders)
   SELECT COUNT(*) INTO v_cnt
     FROM ticket t
     JOIN orders o ON o.order_id = t.order_id
@@ -54,23 +68,23 @@ BEGIN
      AND s.seat_zone   = v_zone
      AND o.status IN ('pending', 'paid');
   IF v_cnt >= 2 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Quantity exceeds limit!';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maximum 2 tickets of the same type per event';
   END IF;
 
-  -- Check: only 1 zone in 1 order
+  -- Check: one order can only contain one seat_zone
   SELECT COUNT(*) INTO v_cnt
     FROM ticket t
     JOIN seat s ON s.seat_id = t.seat_id
    WHERE t.order_id = NEW.order_id
      AND s.seat_zone <> v_zone;
   IF v_cnt > 0 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Moi don chi chua mot loai ve';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'One order can only contain one ticket type';
   END IF;
-
-  -- Check standing ticket: capacity, create id and add virtual seat
+	
+  -- Standing ticket: check capacity, generate id, insert virtual seat (done last)
   IF NEW.seat_id IS NULL THEN
     IF COALESCE(v_stand_cap, 0) <= 0 THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'There is no standing zone for this event!';
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'This event has no standing area';
     END IF;
 
     SELECT COUNT(*) INTO v_cnt
@@ -81,7 +95,7 @@ BEGIN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Out of capacity!';
     END IF;
 
-    ----- order number(stt) = MAX + 1
+    -- Order number = current max + 1 (not COUNT, because rows may be deleted)
     SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(seat_id, '-', -1) AS UNSIGNED)), 0) + 1
       INTO v_next
       FROM seat

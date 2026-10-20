@@ -8,9 +8,11 @@
 CREATE OR REPLACE VIEW vw_order_history AS
 SELECT
   o.order_id,
-  o.customer_id,
-  c.full_name   AS customer_name,
+  o.place_at,
   o.status      AS order_status,
+  o.customer_id,
+  c.username,
+  c.name        AS customer_name,
   t.event_id,
   e.event_name,
   e.artist,
@@ -22,7 +24,9 @@ SELECT
   s.seat_row,
   s.seat_number,
   t.ticket_price,
-  t.is_standing
+  t.is_standing,
+  t.pay_method,
+  t.pay_date
 FROM orders o
 JOIN      customer c ON c.customer_id = o.customer_id
 LEFT JOIN ticket   t ON t.order_id    = o.order_id

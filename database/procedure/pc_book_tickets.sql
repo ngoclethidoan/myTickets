@@ -80,8 +80,9 @@ BEGIN
       END IF;
     END IF;
 
-    INSERT INTO ticket (seat_id, event_id, order_id, ticket_price, is_standing)
-    VALUES (v_seat_id, p_event_id, p_order_id, p_ticket_price, v_is_standing);
+    -- customer_id is the `buy` link: the ticket belongs to the customer who placed the order
+    INSERT INTO ticket (seat_id, event_id, order_id, customer_id, ticket_price, is_standing)
+    VALUES (v_seat_id, p_event_id, p_order_id, p_customer_id, p_ticket_price, v_is_standing);
 
     SET v_i = v_i + 1;
   END WHILE;
