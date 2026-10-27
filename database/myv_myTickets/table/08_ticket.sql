@@ -19,4 +19,4 @@ CREATE TABLE IF NOT EXISTS ticket (
   CONSTRAINT chk_ticket_price   CHECK (ticket_price >= 0),
   CONSTRAINT chk_ticket_pay     CHECK ((pay_method IS NULL AND pay_date IS NULL)
                                     OR (pay_method IS NOT NULL AND pay_date IS NOT NULL))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

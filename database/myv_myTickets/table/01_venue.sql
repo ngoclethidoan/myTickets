@@ -4,4 +4,4 @@ CREATE TABLE IF NOT EXISTS venue (
   capacity INT          NOT NULL,
   PRIMARY KEY (venue_id),
   CONSTRAINT chk_venue_capacity CHECK (capacity > 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

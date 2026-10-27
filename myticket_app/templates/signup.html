@@ -1,0 +1,23 @@
+{% extends "auth_base.html" %}
+{% block title %}Sign up · myTickets{% endblock %}
+{% block form %}
+<h1>Sign up</h1>
+{% if errors %}<ul class="form-error" role="alert">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+<form method="post" class="stack">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <div class="field"><label for="username">Username</label>
+    <input id="username" name="username" type="text" autocomplete="username" maxlength="50" value="{{ form.username }}" required></div>
+  <div class="field"><label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required></div>
+  <div class="field"><label for="confirm">Confirm password</label>
+    <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required></div>
+  <div class="field"><label for="name">Full name</label>
+    <input id="name" name="name" type="text" autocomplete="name" value="{{ form.name }}" required></div>
+  <div class="field"><label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email" value="{{ form.email }}" required></div>
+  <div class="field"><label for="phone_num">Phone number <span class="muted">(optional)</span></label>
+    <input id="phone_num" name="phone_num" type="tel" autocomplete="tel" value="{{ form.phone_num }}"></div>
+  <button class="btn btn-block" type="submit">Sign up</button>
+</form>
+<p class="muted">Already have an account? <a class="hl" href="{{ url_for('signin') }}">Sign in</a></p>
+{% endblock %}

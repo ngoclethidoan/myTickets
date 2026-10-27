@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Admin · myTickets{% endblock %}
+{% block content %}
+<main class="page">
+  <h1>Admin dashboard</h1>
+
+  <section class="card stack">
+    <h2>Event stats</h2>
+    {% if events %}
+    <form method="get" class="inline-form">
+      <label class="sr-only" for="event">Event</label>
+      <select id="event" name="event" onchange="this.form.submit()">
+        {% for e in events %}<option value="{{ e.event_id }}" {{ 'selected' if e.event_id == chosen }}>{{ e.event_id }} · {{ e.event_name }}</option>{% endfor %}
+      </select>
+      <noscript><button class="btn-outline" type="submit">Show</button></noscript>
+    </form>
+    {% if stats %}
+    <div class="stats">
+      <div><span class="muted small">Tickets paid</span><strong>{{ stats.tickets_paid }}</strong></div>
+      <div><span class="muted small">Tickets pending</span><strong>{{ stats.tickets_pending }}</strong></div>
+      <div><span class="muted small">Revenue</span><strong>{{ stats.revenue|vnd }}</strong></div>
+      <div><span class="muted small">Seats left</span><strong>{{ stats.seats_left }}</strong></div>
+      <div><span class="muted small">Standing left</span><strong>{{ stats.standing_left }}</strong></div>
+    </div>
+    {% endif %}
+
+    <h3>Free seats</h3>
+    <form method="get" class="inline-form">
+      <input type="hidden" name="event" value="{{ chosen }}">
+      <label class="sr-only" for="zone">Zone</label>
+      <select id="zone" name="zone" onchange="this.form.submit()">
+        <option value="">All zones</option>
+        <option value="VIP" {{ 'selected' if zone == 'VIP' }}>VIP</option>
+        <option value="A" {{ 'selected' if zone == 'A' }}>Zone A</option>
+      </select>
+    </form>
+    {% if seats %}
+    <table>
+      <thead><tr><th>Seat</th><th>Zone</th><th>Row</th><th>Number</th></tr></thead>
+      <tbody>{% for s in seats %}<tr><td>{{ s.seat_id }}</td><td>{{ ZONE_LABEL.get(s.seat_zone, s.seat_zone) }}</td><td>{{ s.seat_row }}</td><td>{{ s.seat_number }}</td></tr>{% endfor %}</tbody>
+    </table>
+    <p class="muted small">Showing {{ seats|length }} of {{ seats_total }} free seats.</p>
+    {% else %}<p class="muted small">No free seats.</p>{% endif %}
+    {% else %}
+    <p class="muted">No events yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="card stack">
+    <h2>Add event</h2>
+    {% if can_add %}
+    <form method="post" action="{{ url_for('admin_add_event') }}" class="stack">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="grid2">
+        <div class="field"><label for="event_name">Event name</label><input id="event_name" name="event_name" required></div>
+        <div class="field"><label for="artist">Artist</label><input id="artist" name="artist"></div>
+        <div class="field"><label for="venue_id">Venue</label>
+          <select id="venue_id" name="venue_id" required>{% for v in venues %}<option value="{{ v.venue_id }}">{{ v.venue_id }} · {{ v.address }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="standing_capacity">Standing capacity</label><input id="standing_capacity" name="standing_capacity" type="number" min="0" value="0"></div>
+        <div class="field"><label for="sale_time">Sales open</label><input id="sale_time" name="sale_time" type="datetime-local" required></div>
+        <div class="field"><label for="start_time">Event starts</label><input id="start_time" name="start_time" type="datetime-local" required></div>
+      </div>
+      <button class="btn" type="submit">Create event</button>
+    </form>
+    {% else %}
+    <p class="muted">Only super admins can add events. Your account is staff.</p>
+    {% endif %}
+  </section>
+
+  <section class="card stack">
+    <h2>Recent activity</h2>
+    {% if activity %}
+    <table>
+      <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Target</th></tr></thead>
+      <tbody>{% for a in activity %}<tr><td>{{ a.done_at|stamp }}</td><td>{{ a.username }} · {{ a.admin_id }}</td><td>{{ a.action }}</td><td>{{ a.target_id or '' }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<p class="muted small">Nothing logged yet.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

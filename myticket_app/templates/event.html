@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ ev.event_name }} · myTickets{% endblock %}
+{% block content %}
+<main class="page narrow">
+  <a class="back" href="{{ url_for('home') }}">&larr; All events</a>
+  <h1>{{ ev.event_name }}</h1>
+  <p class="muted">{% if ev.artist %}{{ ev.artist }} · {% endif %}{{ ev.venue }}</p>
+  <p class="muted">Starts {{ ev.start_time|when }} · Sales open {{ ev.sale_time|when }}</p>
+
+  {% if sale == 'soon' %}<p class="note note-amber">Ticket sales have not started yet.</p>{% endif %}
+  {% if sale == 'ended' %}<p class="note note-red">This event has started. Sales are closed.</p>{% endif %}
+
+  <form method="post" action="{{ url_for('book', event_id=ev.event_id) }}" class="card stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <h2>Choose a zone</h2>
+    <p class="muted small">Up to {{ max_per_zone }} tickets per zone for each event. One order covers one zone.</p>
+    <div class="zones">
+      {% for z in zones %}
+      <label class="zone {{ 'zone-off' if z.max_qty == 0 }}">
+        <input type="radio" name="zone" value="{{ z.key }}" {{ 'disabled' if z.max_qty == 0 }} required>
+        <span class="zone-name">{{ z.label }}</span>
+        <span class="zone-price">{{ z.price|vnd }}</span>
+        <span class="muted small">{{ z.note }}{% if z.held %} · you hold {{ z.held }}{% endif %}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="field narrow-field"><label for="qty">Tickets</label>
+      <select id="qty" name="qty">
+        <option value="1">1</option>
+        <option value="2">2</option>
+      </select>
+    </div>
+    <button class="btn" type="submit" {{ 'disabled' if sale != 'open' }}>Place order</button>
+    <p class="muted small">Your order starts as pending. Pay it from My orders to lock the seats.</p>
+  </form>
+</main>
+{% endblock %}

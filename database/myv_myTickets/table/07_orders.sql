@@ -6,4 +6,4 @@ CREATE TABLE IF NOT EXISTS orders (
   status      ENUM('pending', 'paid', 'failed') NOT NULL DEFAULT 'pending',
   PRIMARY KEY (order_id),
   CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) REFERENCES customer (customer_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -8,4 +8,4 @@ CREATE TABLE IF NOT EXISTS event (
   standing_capacity INT          NOT NULL DEFAULT 0,
   PRIMARY KEY (event_id),
   CONSTRAINT fk_event_venue FOREIGN KEY (venue_id) REFERENCES venue (venue_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
