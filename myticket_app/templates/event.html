@@ -3,6 +3,7 @@
 {% block content %}
 <main class="page narrow">
   <a class="back" href="{{ url_for('home') }}">&larr; All events</a>
+  {% if poster %}<img class="banner" src="{{ poster }}" alt="Poster of {{ ev.event_name }}">{% endif %}
   <h1>{{ ev.event_name }}</h1>
   <p class="muted">{% if ev.artist %}{{ ev.artist }} · {% endif %}{{ ev.venue }}</p>
   <p class="muted">Starts {{ ev.start_time|when }} · Sales open {{ ev.sale_time|when }}</p>
@@ -13,16 +14,18 @@
   <form method="post" action="{{ url_for('book', event_id=ev.event_id) }}" class="card stack">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <h2>Choose a zone</h2>
-    <p class="muted small">Up to {{ max_per_zone }} tickets per zone for each event. One order covers one zone.</p>
-    <div class="zones">
-      {% for z in zones %}
-      <label class="zone {{ 'zone-off' if z.max_qty == 0 }}">
+    <p class="muted small">Click a zone on the map. Up to {{ max_per_zone }} tickets per zone for each event, and one order covers one zone.</p>
+    <div class="venue-map" role="radiogroup" aria-label="Venue map">
+      <div class="stage">STAGE</div>
+      {% for key in ['STANDING', 'VIP', 'A'] %}{% for z in zones if z.key == key and z.exists %}
+      <label class="mapzone mz-{{ z.key|lower }} {{ 'zone-off' if z.max_qty == 0 }}">
         <input type="radio" name="zone" value="{{ z.key }}" {{ 'disabled' if z.max_qty == 0 }} required>
         <span class="zone-name">{{ z.label }}</span>
         <span class="zone-price">{{ z.price|vnd }}</span>
-        <span class="muted small">{{ z.note }}{% if z.held %} · you hold {{ z.held }}{% endif %}</span>
+        <span class="small">{{ z.note }}{% if z.held %} · you hold {{ z.held }}{% endif %}</span>
       </label>
-      {% endfor %}
+      {% endfor %}{% endfor %}
+      <div class="map-note muted small">Seats inside a zone are assigned automatically.</div>
     </div>
     <div class="field narrow-field"><label for="qty">Tickets</label>
       <select id="qty" name="qty">

@@ -25,7 +25,7 @@ const CTA = {{ ('Book tickets' if user else 'Sign in to book')|tojson }};
     { w: 240, h: 320, date: 32, name: 18, meta: 13, op: 0.8 },
     { w: 180, h: 250, date: 26, name: 15, meta: 12, op: 0.6 }
   ];
-  const TINTS = ['rgba(255,107,61,0.18)', 'rgba(242,193,78,0.16)', 'rgba(95,211,141,0.14)', 'rgba(255,133,145,0.16)'];
+  const TINTS = ['rgba(255,107,61,0.22)', 'rgba(255,200,87,0.35)', 'rgba(46,196,182,0.25)', 'rgba(255,133,145,0.25)'];
   const OFFSETS = { 1: [0], 2: [0, 1], 3: [-1, 0, 1], 4: [-1, 0, 1], 5: [-2, -1, 0, 1, 2] };
 
   function el(tag, text, style) {
@@ -43,11 +43,20 @@ const CTA = {{ ('Book tickets' if user else 'Sign in to book')|tojson }};
     else { node.type = 'button'; node.setAttribute('aria-label', 'Show ' + ev.name); node.addEventListener('click', () => { idx = i; render(); }); }
     node.className = 'ev-card' + (center ? ' ev-center' : '');
     node.style.cssText = 'width:' + s.w + 'px;height:' + s.h + 'px;opacity:' + s.op;
-    const poster = el('div', undefined, 'background:' + TINTS[i % 4]);
+    const poster = el('div');
     poster.className = 'ev-poster';
-    poster.append(el('span', ev.day, 'font-size:' + s.date + 'px'), el('span', ev.month));
-    poster.firstChild.className = 'ev-day';
-    poster.lastChild.className = 'ev-month';
+    if (ev.img) {
+      poster.style.cssText = 'background:center / cover no-repeat url(' + JSON.stringify(ev.img) + ')';
+      const badge = el('span', undefined);
+      badge.className = 'ev-badge';
+      badge.append(el('b', ev.day), document.createTextNode(' ' + ev.month));
+      poster.append(badge);
+    } else {
+      poster.style.background = TINTS[i % 4];
+      const day = el('span', ev.day, 'font-size:' + s.date + 'px'); day.className = 'ev-day';
+      const mon = el('span', ev.month); mon.className = 'ev-month';
+      poster.append(day, mon);
+    }
     const info = el('div');
     info.className = 'ev-info';
     const name = el('span', ev.name, 'font-size:' + s.name + 'px'); name.className = 'ev-name';

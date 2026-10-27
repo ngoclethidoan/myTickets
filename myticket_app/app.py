@@ -42,6 +42,12 @@ def stamp(value):
     return value.strftime("%d %b %Y, %H:%M") if value else ""
 
 
+def poster_url(event_id):
+    """Poster image is static/events/<event_id>.jpg. Returns None when the file is missing."""
+    path = os.path.join(app.static_folder, "events", event_id + ".jpg")
+    return url_for("static", filename="events/" + event_id + ".jpg") if os.path.isfile(path) else None
+
+
 def csrf_token():
     if "_csrf" not in session:
         session["_csrf"] = secrets.token_hex(16)
@@ -132,6 +138,7 @@ def home():
             "name": r["event_name"],
             "artist": r["artist"] or "",
             "venue": r["venue"],
+            "img": poster_url(r["event_id"]),
             "href": target if u else url_for("signin", next=target),
         })
     return render_template("home.html", events=events, q=q)
@@ -268,9 +275,10 @@ def event_page(event_id):
             exists = n > 0
             note = "%d left" % n if n else "Sold out"
             max_qty = min(room, n)
-        zones.append({"key": key, "label": ZONE_LABEL[key], "price": price, "note": note, "held": h,
+        zones.append({"key": key, "label": ZONE_LABEL[key], "price": price, "note": note, "held": h, "exists": exists,
                       "max_qty": max_qty if sale == "open" else 0, "available": available})
-    return render_template("event.html", ev=ev, zones=zones, sale=sale, max_per_zone=MAX_PER_ZONE)
+    return render_template("event.html", ev=ev, zones=zones, sale=sale, max_per_zone=MAX_PER_ZONE,
+                           poster=poster_url(ev["event_id"]))
 
 
 @app.route("/event/<event_id>/book", methods=["POST"])
