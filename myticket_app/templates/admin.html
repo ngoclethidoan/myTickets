@@ -24,14 +24,40 @@
     </div>
     {% endif %}
 
+    <h3>Poster</h3>
+    <div class="poster-row">
+      {% if poster %}<img class="poster-thumb" src="{{ poster }}?v={{ range(1, 10**6) | random }}" alt="Poster of {{ chosen }}">{% else %}<span class="muted small">No poster yet for {{ chosen }}.</span>{% endif %}
+      {% if can_add %}
+      <form method="post" action="{{ url_for('admin_set_poster', event_id=chosen) }}" enctype="multipart/form-data" class="inline-form">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <label class="sr-only" for="poster-replace">Poster image</label>
+        <input id="poster-replace" name="poster" type="file" accept="image/jpeg,image/png,image/webp" required>
+        <button class="btn-outline" type="submit">{{ 'Replace poster' if poster else 'Upload poster' }}</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if can_add %}
+    <h3>Delete event</h3>
+    {% if delete_block %}
+      <p class="muted small">{{ delete_block }}</p>
+    {% else %}
+      <form method="post" action="{{ url_for('admin_delete_event', event_id=chosen) }}" class="inline-form"
+            onsubmit="return confirm('Delete event {{ chosen }} for good? This cannot be undone.');">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn-outline btn-danger" type="submit">Delete {{ chosen }}</button>
+        <span class="muted small">No tickets and not started yet, so it can be removed.</span>
+      </form>
+    {% endif %}
+    {% endif %}
+
     <h3>Free seats</h3>
     <form method="get" class="inline-form">
       <input type="hidden" name="event" value="{{ chosen }}">
       <label class="sr-only" for="zone">Zone</label>
       <select id="zone" name="zone" onchange="this.form.submit()">
         <option value="">All zones</option>
-        <option value="VIP" {{ 'selected' if zone == 'VIP' }}>VIP</option>
-        <option value="A" {{ 'selected' if zone == 'A' }}>Zone A</option>
+        {% for key, label in zone_options %}<option value="{{ key }}" {{ 'selected' if zone == key }}>{{ label }}</option>{% endfor %}
       </select>
     </form>
     {% if seats %}
@@ -49,7 +75,7 @@
   <section class="card stack">
     <h2>Add event</h2>
     {% if can_add %}
-    <form method="post" action="{{ url_for('admin_add_event') }}" class="stack">
+    <form method="post" action="{{ url_for('admin_add_event') }}" class="stack" enctype="multipart/form-data">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <div class="grid2">
         <div class="field"><label for="event_name">Event name</label><input id="event_name" name="event_name" required></div>
@@ -60,6 +86,8 @@
         <div class="field"><label for="sale_time">Sales open</label><input id="sale_time" name="sale_time" type="datetime-local" required></div>
         <div class="field"><label for="start_time">Event starts</label><input id="start_time" name="start_time" type="datetime-local" required></div>
       </div>
+      <div class="field"><label for="poster">Poster <span class="muted">(optional, JPG, PNG or WebP, 6 MB at most)</span></label>
+        <input id="poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp"></div>
       <button class="btn" type="submit">Create event</button>
     </form>
     {% else %}

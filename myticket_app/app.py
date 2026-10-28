@@ -5,24 +5,38 @@ All ticket rules live in the database (triggers + procedures). This app only
 signs people in, picks the right MySQL account, calls the procedures and shows results.
 """
 import os
+import re
 import secrets
 from datetime import datetime
 from functools import wraps
 
 import mysql.connector
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from PIL import Image
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
 
 app = Flask(__name__)
 app.secret_key = os.environ["SECRET_KEY"]
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                  MAX_CONTENT_LENGTH=6 * 1024 * 1024)  # uploads (posters) are limited to 6 MB
 
 # The database has no price table, so prices live here (VND per ticket).
-PRICES = {"VIP": 1500000, "A": 800000, "STANDING": 450000}
-ZONE_LABEL = {"VIP": "VIP", "A": "Zone A", "STANDING": "Standing"}
-MAX_PER_ZONE = 2
+# Zone names must match seat.seat_zone in the database. STANDING is special (no seat numbers).
+PRICES = {"SKYBOX": 2500000, "VIP": 1500000, "A": 800000, "BALCONY": 700000, "B": 500000, "STANDING": 450000}
+ZONE_LABEL = {"SKYBOX": "Sky Box", "VIP": "VIP", "A": "Zone A", "BALCONY": "Balcony", "B": "Zone B",
+              "STANDING": "Standing"}
+# Which zones each venue has. A venue not listed here falls back to "every zone that has seats".
+# The map for a venue is templates/maps/<venue-name-as-slug>.html (e.g. aurora-arena.html).
+VENUE_ZONES = {
+    "The Velvet Room": ["VIP", "A", "STANDING"],
+    "Lantern Hall": ["VIP", "A", "B"],
+    "Starlight Theatre": ["SKYBOX", "VIP", "A", "BALCONY"],
+    "Aurora Arena": ["SKYBOX", "VIP", "A", "B", "STANDING"],
+    "Skyline Dome": ["SKYBOX", "VIP", "A", "B", "STANDING"],
+}
+MAX_PER_EVENT = 2  # tickets one customer may hold for one event, all zones together
 PAY_METHODS = ["Card", "Bank transfer", "E-wallet"]
 
 
@@ -46,6 +60,30 @@ def poster_url(event_id):
     """Poster image is static/events/<event_id>.jpg. Returns None when the file is missing."""
     path = os.path.join(app.static_folder, "events", event_id + ".jpg")
     return url_for("static", filename="events/" + event_id + ".jpg") if os.path.isfile(path) else None
+
+
+def save_poster(event_id, upload):
+    """Check an uploaded poster and store it as static/events/<event_id>.jpg.
+    The file name comes from the event id, never from the uploaded name.
+    Returns an error message, or None when saved (or when nothing was uploaded)."""
+    if upload is None or not upload.filename:
+        return None
+    try:
+        Image.open(upload.stream).verify()  # is it really an image?
+        upload.stream.seek(0)
+        img = Image.open(upload.stream).convert("RGB")
+    except Exception:
+        return "The poster is not a valid image. Use a JPG, PNG or WebP file."
+    img.thumbnail((1200, 1600))
+    os.makedirs(os.path.join(app.static_folder, "events"), exist_ok=True)
+    img.save(os.path.join(app.static_folder, "events", event_id + ".jpg"), "JPEG", quality=88)
+    return None
+
+
+@app.errorhandler(413)
+def too_large(_e):
+    flash("That file is too big (6 MB at most).", "error")
+    return redirect(url_for("admin_dashboard" if (session.get("user") or {}).get("role") == "admin" else "home"))
 
 
 def csrf_token():
@@ -260,25 +298,38 @@ def event_page(event_id):
         (session["user"]["id"], event_id),
     )}
 
+    wanted = VENUE_ZONES.get(ev["venue"])
+    held_total = sum(held.values())
+    room = max(MAX_PER_EVENT - held_total, 0)  # tickets this customer may still add for this event
     zones = []
     for key, price in PRICES.items():
+        if wanted is not None and key not in wanted:
+            continue
         h = held.get(key, 0)
-        room = max(MAX_PER_ZONE - h, 0)
         if key == "STANDING":
-            available = None
             exists = ev["standing_capacity"] > 0
-            note = "Capacity %d" % ev["standing_capacity"] if exists else "No standing area"
+            note = "Capacity %d" % ev["standing_capacity"] if exists else "Not open for this event"
             max_qty = room if exists else 0
         else:
             n = db.fetch_all("customer", "SELECT fn_available_seats(%s, %s) AS n", (event_id, key))[0]["n"] or 0
-            available = n
             exists = n > 0
             note = "%d left" % n if n else "Sold out"
             max_qty = min(room, n)
-        zones.append({"key": key, "label": ZONE_LABEL[key], "price": price, "note": note, "held": h, "exists": exists,
-                      "max_qty": max_qty if sale == "open" else 0, "available": available})
-    return render_template("event.html", ev=ev, zones=zones, sale=sale, max_per_zone=MAX_PER_ZONE,
-                           poster=poster_url(ev["event_id"]))
+            if wanted is None and not exists:
+                continue  # unknown venue: only show zones that have seats
+        if wanted is None and key == "STANDING" and not exists:
+            continue
+        if sale != "open":
+            max_qty = 0
+        zones.append({"key": key, "label": ZONE_LABEL[key], "price": price, "note": note, "held": h,
+                      "max_qty": max_qty})
+    slug = re.sub(r"[^a-z0-9]+", "-", ev["venue"].lower()).strip("-")
+    map_file = os.path.join(app.root_path, app.template_folder or "templates", "maps", slug + ".html")
+    map_tpl = "maps/%s.html" % slug if os.path.isfile(map_file) else None
+    if map_tpl is None:
+        app.logger.warning("No map file for venue %r (looked for %s)", ev["venue"], map_file)
+    return render_template("event.html", ev=ev, zones=zones, sale=sale, max_per_event=MAX_PER_EVENT, held_total=held_total, room=room,
+                           poster=poster_url(ev["event_id"]), map_tpl=map_tpl)
 
 
 @app.route("/event/<event_id>/book", methods=["POST"])
@@ -421,7 +472,17 @@ def admin_dashboard():
         "SELECT l.done_at, l.admin_id, a.username, l.action, l.target_id "
         "FROM audit_log l JOIN admin a ON a.admin_id = l.admin_id ORDER BY l.log_id DESC LIMIT 10",
     )
-    return render_template("admin.html", events=events, venues=venues, chosen=chosen, zone=zone,
+    zone_options = [(k, v) for k, v in ZONE_LABEL.items() if k != "STANDING"]
+    # Delete button state (the database trigger enforces the same rules)
+    delete_block = None
+    if stats:
+        start = next((e["start_time"] for e in events if e["event_id"] == chosen), None)
+        if (stats["tickets_paid"] or 0) + (stats["tickets_pending"] or 0) > 0:
+            delete_block = "This event has tickets, so it cannot be deleted."
+        elif start is not None and start <= datetime.now():
+            delete_block = "This event has already started, so it cannot be deleted."
+    return render_template("admin.html", delete_block=delete_block, poster=poster_url(chosen) if chosen else None, events=events, venues=venues, chosen=chosen, zone=zone,
+                           zone_options=zone_options,
                            stats=stats, seats=seats[:10], seats_total=len(seats), activity=activity,
                            can_add=(me["level"] == "super_admin"))
 
@@ -448,8 +509,52 @@ def admin_add_event():
     except mysql.connector.Error as e:
         flash(friendly(e), "error")
         return redirect(url_for("admin_dashboard"))
-    flash("Event %s created." % out[7], "ok")
+    msg = save_poster(out[7], request.files.get("poster"))
+    if msg:
+        flash("Event %s created, but the poster was not saved. %s" % (out[7], msg), "error")
+    else:
+        flash("Event %s created." % out[7], "ok")
     return redirect(url_for("admin_dashboard", event=out[7]))
+
+
+@app.route("/admin/events/<event_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_event(event_id):
+    me = session["user"]
+    if me["level"] != "super_admin":
+        flash("Only a super admin can delete events.", "error")
+        return redirect(url_for("admin_dashboard", event=event_id))
+    try:
+        db.call("admin", "pc_delete_event", (me["id"], event_id))
+    except mysql.connector.Error as e:
+        flash(friendly(e), "error")
+        return redirect(url_for("admin_dashboard", event=event_id))
+    # The event is gone: remove its poster file too
+    if re.fullmatch(r"EV\d+", event_id):
+        try:
+            os.remove(os.path.join(app.static_folder, "events", event_id + ".jpg"))
+        except OSError:
+            pass
+    flash("Event %s deleted." % event_id, "ok")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/events/<event_id>/poster", methods=["POST"])
+@admin_required
+def admin_set_poster(event_id):
+    if session["user"]["level"] != "super_admin":
+        flash("Only a super admin can change posters.", "error")
+        return redirect(url_for("admin_dashboard", event=event_id))
+    known = [e["event_id"] for e in db.fetch_all("admin", "SELECT event_id FROM " + db.MAIN_DB + ".event")]
+    if event_id not in known:
+        abort(404)
+    upload = request.files.get("poster")
+    if upload is None or not upload.filename:
+        flash("Choose an image first.", "error")
+    else:
+        msg = save_poster(event_id, upload)
+        flash(msg or "Poster saved for %s." % event_id, "error" if msg else "ok")
+    return redirect(url_for("admin_dashboard", event=event_id))
 
 
 if __name__ == "__main__":

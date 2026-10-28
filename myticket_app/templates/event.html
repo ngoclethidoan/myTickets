@@ -1,5 +1,39 @@
 {% extends "base.html" %}
-{% block title %}{{ ev.event_name }} · myTickets{% endblock %}
+{% block title %}{{ ev.event_name }} · myTickets{% if map_tpl %}
+<script>
+(function () {
+  const ZONES = {{ zones|tojson }};
+  const info = {};
+  ZONES.forEach((z) => { info[z.key] = z; });
+  const radios = document.querySelectorAll('input[name="zone"]');
+  const shapes = document.querySelectorAll('.map .zn');
+  function sync() {
+    const picked = document.querySelector('input[name="zone"]:checked');
+    shapes.forEach((g) => g.classList.toggle('sel', !!picked && g.dataset.zone === picked.value));
+  }
+  shapes.forEach((g) => {
+    const z = info[g.dataset.zone];
+    if (!z || z.max_qty === 0) { g.classList.add('off'); }
+    g.setAttribute('tabindex', z && z.max_qty > 0 ? '0' : '-1');
+    g.setAttribute('role', 'radio');
+    g.setAttribute('aria-label', z ? z.label + ', ' + z.note : g.dataset.zone);
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = z ? z.label + ' · ' + z.note : g.dataset.zone;
+    g.prepend(title);
+    function choose() {
+      if (!z || z.max_qty === 0) return;
+      const r = document.querySelector('input[name="zone"][value="' + g.dataset.zone + '"]');
+      if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    g.addEventListener('click', choose);
+    g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); choose(); } });
+  });
+  radios.forEach((r) => r.addEventListener('change', sync));
+  sync();
+})();
+</script>
+{% endif %}
+{% endblock %}
 {% block content %}
 <main class="page narrow">
   <a class="back" href="{{ url_for('home') }}">&larr; All events</a>
@@ -14,27 +48,61 @@
   <form method="post" action="{{ url_for('book', event_id=ev.event_id) }}" class="card stack">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <h2>Choose a zone</h2>
-    <p class="muted small">Click a zone on the map. Up to {{ max_per_zone }} tickets per zone for each event, and one order covers one zone.</p>
-    <div class="venue-map" role="radiogroup" aria-label="Venue map">
-      <div class="stage">STAGE</div>
-      {% for key in ['STANDING', 'VIP', 'A'] %}{% for z in zones if z.key == key and z.exists %}
-      <label class="mapzone mz-{{ z.key|lower }} {{ 'zone-off' if z.max_qty == 0 }}">
+    <p class="muted small">{% if map_tpl %}Click a zone on the map or pick it from the list. {% endif %}Each account can hold up to {{ max_per_event }} tickets for this event, in total. One order covers one zone, so tickets in two different zones need two orders. Seats inside a zone are assigned automatically.</p>
+    {% if held_total %}<p class="note note-amber">You already hold {{ held_total }} ticket{{ 's' if held_total != 1 }} for this event{% if room %}, so you can add {{ room }} more{% else %} and cannot add more{% endif %}.</p>{% endif %}
+    {% if map_tpl %}<div class="map-wrap">{% include map_tpl %}</div>{% endif %}
+    <div class="zonelist" role="radiogroup" aria-label="Zones">
+      {% for z in zones %}
+      <label class="zrow {{ 'zone-off' if z.max_qty == 0 }}">
         <input type="radio" name="zone" value="{{ z.key }}" {{ 'disabled' if z.max_qty == 0 }} required>
+        <span class="chip chip-{{ z.key|lower }}" aria-hidden="true"></span>
         <span class="zone-name">{{ z.label }}</span>
         <span class="zone-price">{{ z.price|vnd }}</span>
-        <span class="small">{{ z.note }}{% if z.held %} · you hold {{ z.held }}{% endif %}</span>
+        <span class="muted small">{{ z.note }}{% if z.held %} · you hold {{ z.held }}{% endif %}</span>
       </label>
-      {% endfor %}{% endfor %}
-      <div class="map-note muted small">Seats inside a zone are assigned automatically.</div>
+      {% endfor %}
     </div>
     <div class="field narrow-field"><label for="qty">Tickets</label>
       <select id="qty" name="qty">
-        <option value="1">1</option>
-        <option value="2">2</option>
+        {% for i in range(1, (room if room else 1) + 1) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
       </select>
     </div>
-    <button class="btn" type="submit" {{ 'disabled' if sale != 'open' }}>Place order</button>
+    <button class="btn" type="submit" {{ 'disabled' if sale != 'open' or room == 0 }}>Place order</button>
     <p class="muted small">Your order starts as pending. Pay it from My orders to lock the seats.</p>
   </form>
 </main>
+{% if map_tpl %}
+<script>
+(function () {
+  const ZONES = {{ zones|tojson }};
+  const info = {};
+  ZONES.forEach((z) => { info[z.key] = z; });
+  const radios = document.querySelectorAll('input[name="zone"]');
+  const shapes = document.querySelectorAll('.map .zn');
+  function sync() {
+    const picked = document.querySelector('input[name="zone"]:checked');
+    shapes.forEach((g) => g.classList.toggle('sel', !!picked && g.dataset.zone === picked.value));
+  }
+  shapes.forEach((g) => {
+    const z = info[g.dataset.zone];
+    if (!z || z.max_qty === 0) { g.classList.add('off'); }
+    g.setAttribute('tabindex', z && z.max_qty > 0 ? '0' : '-1');
+    g.setAttribute('role', 'radio');
+    g.setAttribute('aria-label', z ? z.label + ', ' + z.note : g.dataset.zone);
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = z ? z.label + ' · ' + z.note : g.dataset.zone;
+    g.prepend(title);
+    function choose() {
+      if (!z || z.max_qty === 0) return;
+      const r = document.querySelector('input[name="zone"][value="' + g.dataset.zone + '"]');
+      if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    g.addEventListener('click', choose);
+    g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); choose(); } });
+  });
+  radios.forEach((r) => r.addEventListener('change', sync));
+  sync();
+})();
+</script>
+{% endif %}
 {% endblock %}

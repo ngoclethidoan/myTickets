@@ -58,17 +58,15 @@ BEGIN
     END IF;
   END IF;
 
-  -- Check: max 2 tickets of the same zone per event per customer (pending + paid orders)
+  -- Check: max 2 tickets per event per customer, across all zones (pending + paid orders)
   SELECT COUNT(*) INTO v_cnt
     FROM ticket t
     JOIN orders o ON o.order_id = t.order_id
-    JOIN seat   s ON s.seat_id  = t.seat_id
    WHERE o.customer_id = v_customer
      AND t.event_id    = NEW.event_id
-     AND s.seat_zone   = v_zone
      AND o.status IN ('pending', 'paid');
   IF v_cnt >= 2 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maximum 2 tickets of the same type per event';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Maximum 2 tickets per event for one customer';
   END IF;
 
   -- Check: one order can only contain one seat_zone
@@ -80,7 +78,7 @@ BEGIN
   IF v_cnt > 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'One order can only contain one ticket type';
   END IF;
-	
+
   -- Standing ticket: check capacity, generate id, insert virtual seat (done last)
   IF NEW.seat_id IS NULL THEN
     IF COALESCE(v_stand_cap, 0) <= 0 THEN

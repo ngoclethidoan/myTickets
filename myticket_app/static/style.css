@@ -132,16 +132,39 @@ th{color:var(--muted);font-weight:500}
 .ev-poster{position:relative}
 .banner{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:16px;margin-bottom:16px;box-shadow:var(--shadow)}
 
-/* venue map */
-.venue-map{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 12px;background:var(--panel2);border-radius:16px}
-.stage{width:60%;text-align:center;font-family:"Bricolage Grotesque",sans-serif;font-weight:700;letter-spacing:.3em;color:#fff;background:var(--text);padding:10px 0;border-radius:6px 6px 40px 40px}
-.mapzone{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 10px;border:2px solid transparent;border-radius:14px;cursor:pointer;text-align:center;transition:transform .1s,box-shadow .1s}
-.mapzone input{position:absolute;opacity:0}
-.mapzone:hover:not(.zone-off){transform:translateY(-2px);box-shadow:var(--shadow)}
-.mz-standing{width:55%;background:#CFF3EE}
-.mz-vip{width:75%;background:#FFE29A}
-.mz-a{width:100%;background:#FFD3BF}
-.mapzone:has(input:checked){border-color:var(--text);box-shadow:0 0 0 3px var(--mint)}
-.mapzone:has(input:focus-visible){outline:2px solid var(--text);outline-offset:3px}
-.mapzone.zone-off{opacity:.45;filter:grayscale(.6)}
-.map-note{margin-top:4px}
+/* venue maps */
+.map-wrap{background:var(--panel2);border-radius:16px;padding:14px;display:flex;justify-content:center}
+.map{width:100%;height:auto;display:block}
+.map-sm{max-width:460px}.map-lg{max-width:640px}
+.map-sm .zt,.map-sm .pt{font-size:9px}
+.map-lg .zt,.map-lg .pt{font-size:13px}
+.zt,.pt{font-family:"Instrument Sans",system-ui,sans-serif;font-weight:600;text-anchor:middle;dominant-baseline:central;fill:#000;pointer-events:none}
+.pt{fill:#fff}
+.map .outline{fill:none;stroke:var(--line);stroke-width:.8;stroke-dasharray:3 2}
+.map .floor{fill:#fff;stroke:var(--line);stroke-width:.8}
+.map .stage{fill:#2B2233}
+.zn{cursor:pointer;outline:none}
+.zn .sh{stroke:#2B2233;stroke-opacity:.35;stroke-width:.8;transition:filter .1s}
+.zn:hover .sh{filter:brightness(.95);stroke-opacity:.7}
+.zn:focus-visible .sh{stroke:#2B2233;stroke-opacity:1;stroke-width:2}
+.zn.sel .sh{stroke:#2B2233;stroke-opacity:1;stroke-width:2.6}
+.zn.off{cursor:not-allowed}
+.zn.off .sh{opacity:.4}
+.z-standing .sh,.chip-standing{fill:#CFF3EE;background:#CFF3EE}
+.z-skybox .sh,.chip-skybox{fill:#E3DCFB;background:#E3DCFB}
+.z-vip .sh,.chip-vip{fill:#FFE29A;background:#FFE29A}
+.z-a .sh,.chip-a{fill:#FFD3BF;background:#FFD3BF}
+.z-b .sh,.chip-b{fill:#CFE4FF;background:#CFE4FF}
+.z-balcony .sh,.chip-balcony{fill:#D3F0C4;background:#D3F0C4}
+.zonelist{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.zrow{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"chip name" "chip price" "chip note";column-gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);cursor:pointer}
+.zrow input{position:absolute;opacity:0}
+.zrow .chip{grid-area:chip;width:22px;height:22px;border-radius:6px;border:1px solid rgba(43,34,51,.35)}
+.zrow .zone-name{grid-area:name}.zrow .zone-price{grid-area:price}.zrow .muted{grid-area:note}
+.zrow:has(input:checked){border-color:var(--text);box-shadow:0 0 0 3px var(--mint)}
+.zrow:has(input:focus-visible){outline:2px solid var(--text);outline-offset:2px}
+.zrow.zone-off{opacity:.45;cursor:not-allowed}
+
+.poster-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.poster-thumb{width:90px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+input[type=file]{padding:8px 10px;max-width:100%}
