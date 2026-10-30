@@ -1,6 +1,6 @@
 # MyTickets
 
-A concert ticket-selling system for the database course CS311V (Group 2).
+A concert ticket-selling system for the database course CS311V (Individual).
 Three tiers: **MySQL** (Aiven) → **Python Flask** → **HTML/CSS** in the browser.
 
 Customers browse events, pick a zone on the venue map, book up to 2 tickets per event, pay and cancel.
