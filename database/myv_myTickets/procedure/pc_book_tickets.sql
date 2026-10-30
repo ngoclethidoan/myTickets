@@ -5,6 +5,8 @@ DELIMITER $$
 -- Book 1 or 2 tickets of ONE seat zone for a customer. Creates a pending order and adds the tickets to it.
 -- Real zones: the procedure picks the first free seats (ordered by row, then number).
 -- STANDING zone: seat_id is passed as NULL and trg_ticket_bi creates the virtual seat.
+-- p_ticket_price is the LIST price of one ticket. The customer's membership discount
+-- (vw_customer_membership) is taken off here, and the discounted price is what is stored in the ticket.
 -- Everything runs in one transaction: if any ticket fails, the order and all tickets are rolled back.
 CREATE PROCEDURE pc_book_tickets(
   IN  p_customer_id  VARCHAR(20),
@@ -19,6 +21,8 @@ BEGIN
   DECLARE v_seat_id     VARCHAR(20);
   DECLARE v_is_standing TINYINT(1);
   DECLARE v_i           INT DEFAULT 0;
+  DECLARE v_discount    INT DEFAULT 0;
+  DECLARE v_price       DECIMAL(12,2);
 
   -- On any error: undo everything, then re-raise the original error to the caller
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -46,6 +50,10 @@ BEGIN
   END IF;
 
   SET v_is_standing = (p_seat_zone = 'STANDING');
+
+  -- Membership discount of this customer (stays 0 when the customer has no rank row)
+  SELECT discount_percent INTO v_discount FROM vw_customer_membership WHERE customer_id = p_customer_id;
+  SET v_price = ROUND(p_ticket_price * (100 - COALESCE(v_discount, 0)) / 100, 0);
 
   START TRANSACTION;
 
@@ -82,7 +90,7 @@ BEGIN
 
     -- customer_id is the `buy` link: the ticket belongs to the customer who placed the order
     INSERT INTO ticket (seat_id, event_id, order_id, customer_id, ticket_price, is_standing)
-    VALUES (v_seat_id, p_event_id, p_order_id, p_customer_id, p_ticket_price, v_is_standing);
+    VALUES (v_seat_id, p_event_id, p_order_id, p_customer_id, v_price, v_is_standing);
 
     SET v_i = v_i + 1;
   END WHILE;

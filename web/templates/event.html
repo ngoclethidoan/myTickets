@@ -49,6 +49,7 @@
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <h2>Choose a zone</h2>
     <p class="muted small">{% if map_tpl %}Click a zone on the map or pick it from the list. {% endif %}Each account can hold up to {{ max_per_event }} tickets for this event, in total. One order covers one zone, so tickets in two different zones need two orders. Seats inside a zone are assigned automatically.</p>
+    {% if member.discount_percent %}<p class="note">Your {{ member.tier_name }} discount of {{ member.discount_percent }}% is already included in the prices below.</p>{% endif %}
     {% if held_total %}<p class="note note-amber">You already hold {{ held_total }} ticket{{ 's' if held_total != 1 }} for this event{% if room %}, so you can add {{ room }} more{% else %} and cannot add more{% endif %}.</p>{% endif %}
     {% if map_tpl %}<div class="map-wrap">{% include map_tpl %}</div>{% endif %}
     <div class="zonelist" role="radiogroup" aria-label="Zones">
@@ -57,7 +58,7 @@
         <input type="radio" name="zone" value="{{ z.key }}" {{ 'disabled' if z.max_qty == 0 }} required>
         <span class="chip chip-{{ z.key|lower }}" aria-hidden="true"></span>
         <span class="zone-name">{{ z.label }}</span>
-        <span class="zone-price">{{ z.price|vnd }}</span>
+        <span class="zone-price">{% if z.net != z.price %}<s class="muted">{{ z.price|vnd }}</s> {% endif %}{{ z.net|vnd }}</span>
         <span class="muted small">{{ z.note }}{% if z.held %} · you hold {{ z.held }}{% endif %}</span>
       </label>
       {% endfor %}

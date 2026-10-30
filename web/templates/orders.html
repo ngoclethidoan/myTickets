@@ -3,6 +3,7 @@
 {% block content %}
 <main class="page">
   <h1>My orders</h1>
+  {% include "member_card.html" %}
   <nav class="tabs" aria-label="Filter orders">
     {% for key, label in [('all','All'),('pending','Pending'),('paid','Paid'),('failed','Failed')] %}
     <a href="{{ url_for('orders', status=key) }}" class="{{ 'tab-on' if status == key }}" {% if status == key %}aria-current="page"{% endif %}>{{ label }} <span>{{ counts[key] }}</span></a>

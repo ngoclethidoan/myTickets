@@ -269,6 +269,34 @@ def logout():
     return redirect(url_for("home"))
 
 
+# ---------------------------------------------------------------- membership
+def get_membership():
+    """Rank, discount and progress of the signed-in customer (read from vw_customer_membership)."""
+    rows = db.fetch_all("customer", "SELECT * FROM vw_customer_membership WHERE customer_id = %s",
+                        (session["user"]["id"],))
+    if not rows:
+        return {"tier_name": "Bronze", "discount_percent": 0, "spent": 0, "next_tier": None,
+                "next_min_spent": None, "missing": 0, "progress": 100}
+    m = dict(rows[0])
+    m["spent"] = m["spent"] or 0
+    if m["next_tier"]:
+        m["missing"] = max(m["next_min_spent"] - m["spent"], 0)
+        # progress inside the current rank band: from this rank's own minimum to the next minimum
+        base = db.fetch_all("customer", "SELECT min_spent FROM membership_tier WHERE tier_name = %s",
+                            (m["tier_name"],))
+        low = base[0]["min_spent"] if base else 0
+        span = (m["next_min_spent"] - low) or 1
+        m["progress"] = max(0, min(100, int((m["spent"] - low) * 100 / span)))
+    else:
+        m["missing"], m["progress"] = 0, 100
+    return m
+
+
+def net_price(price, discount_percent):
+    """Same rounding as pc_book_tickets: ROUND(price * (100 - d) / 100, 0), half up."""
+    return (int(price) * (100 - int(discount_percent)) + 50) // 100
+
+
 # ---------------------------------------------------------------- event + booking
 @app.route("/event/<event_id>")
 @customer_required
@@ -301,6 +329,7 @@ def event_page(event_id):
     wanted = VENUE_ZONES.get(ev["venue"])
     held_total = sum(held.values())
     room = max(MAX_PER_EVENT - held_total, 0)  # tickets this customer may still add for this event
+    member = get_membership()
     zones = []
     for key, price in PRICES.items():
         if wanted is not None and key not in wanted:
@@ -321,7 +350,8 @@ def event_page(event_id):
             continue
         if sale != "open":
             max_qty = 0
-        zones.append({"key": key, "label": ZONE_LABEL[key], "price": price, "note": note, "held": h,
+        zones.append({"key": key, "label": ZONE_LABEL[key], "price": price,
+                      "net": net_price(price, member["discount_percent"]), "note": note, "held": h,
                       "max_qty": max_qty})
     slug = re.sub(r"[^a-z0-9]+", "-", ev["venue"].lower()).strip("-")
     map_file = os.path.join(app.root_path, app.template_folder or "templates", "maps", slug + ".html")
@@ -329,7 +359,7 @@ def event_page(event_id):
     if map_tpl is None:
         app.logger.warning("No map file for venue %r (looked for %s)", ev["venue"], map_file)
     return render_template("event.html", ev=ev, zones=zones, sale=sale, max_per_event=MAX_PER_EVENT, held_total=held_total, room=room,
-                           poster=poster_url(ev["event_id"]), map_tpl=map_tpl)
+                           member=member, poster=poster_url(ev["event_id"]), map_tpl=map_tpl)
 
 
 @app.route("/event/<event_id>/book", methods=["POST"])
@@ -400,7 +430,7 @@ def orders():
         counts[s] = sum(1 for o in all_orders if o["status"] == s)
     shown = [o for o in all_orders if status == "all" or o["status"] == status]
     return render_template("orders.html", orders=shown, counts=counts, status=status,
-                           pay_open=request.args.get("pay"), methods=PAY_METHODS)
+                           pay_open=request.args.get("pay"), methods=PAY_METHODS, member=get_membership())
 
 
 @app.route("/orders/<order_id>/pay", methods=["POST"])

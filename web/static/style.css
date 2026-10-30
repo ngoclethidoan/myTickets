@@ -168,3 +168,7 @@ th{color:var(--muted);font-weight:500}
 .poster-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .poster-thumb{width:90px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 input[type=file]{padding:8px 10px;max-width:100%}
+.member{margin-top:12px}
+.member-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.member .bar{height:8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);overflow:hidden;margin-top:8px}
+.member .bar span{display:block;height:100%;background:var(--accent);border-radius:999px}

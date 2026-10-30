@@ -1,0 +1,9 @@
+<section class="card member member-{{ member.tier_name|lower }}" aria-label="Membership">
+  <div class="member-top">
+    <span class="pill pill-accent">{{ member.tier_name }}</span>
+    <strong>{{ member.discount_percent }}% off every ticket</strong>
+  </div>
+  <p class="muted small">You have paid {{ member.spent|vnd }} so far.
+  {% if member.next_tier %}{{ member.missing|vnd }} more to reach {{ member.next_tier }}.{% else %}You are at the top rank.{% endif %}</p>
+  {% if member.next_tier %}<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ member.progress }}"><span style="width: {{ member.progress }}%"></span></div>{% endif %}
+</section>
