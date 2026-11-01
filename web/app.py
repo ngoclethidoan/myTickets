@@ -7,7 +7,7 @@ signs people in, picks the right MySQL account, calls the procedures and shows r
 import os
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 import mysql.connector
@@ -37,6 +37,7 @@ VENUE_ZONES = {
     "Skyline Dome": ["SKYBOX", "VIP", "A", "B", "STANDING"],
 }
 MAX_PER_EVENT = 2  # tickets one customer may hold for one event, all zones together
+ORDER_HOLD_MINUTES = 15  # minutes to pay a pending order; keep equal to fn_order_hold_minutes() in the database
 PAY_METHODS = ["Card", "Bank transfer", "E-wallet"]
 
 
@@ -410,6 +411,7 @@ def orders():
             "id": r["order_id"], "placed": r["place_at"], "status": r["order_status"],
             "event": r["event_name"], "venue": r["venue_address"], "start": r["start_time"],
             "tickets": [], "total": 0, "pay_method": None, "pay_date": None,
+            "expires": r["place_at"] + timedelta(minutes=ORDER_HOLD_MINUTES),
         })
         if r["seat_id"]:
             if r["is_standing"]:
@@ -430,7 +432,8 @@ def orders():
         counts[s] = sum(1 for o in all_orders if o["status"] == s)
     shown = [o for o in all_orders if status == "all" or o["status"] == status]
     return render_template("orders.html", orders=shown, counts=counts, status=status,
-                           pay_open=request.args.get("pay"), methods=PAY_METHODS, member=get_membership())
+                           pay_open=request.args.get("pay"), methods=PAY_METHODS, member=get_membership(),
+                           hold_minutes=ORDER_HOLD_MINUTES)
 
 
 @app.route("/orders/<order_id>/pay", methods=["POST"])

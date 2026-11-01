@@ -5,6 +5,8 @@ DELIMITER $$
 -- Finish payment of a pending order.
 -- p_payment_success = 1: the payment method and date are stored on every ticket of the order (the `buy`
 --                        attributes), then the order becomes 'paid' and is locked for good (no cancel, no change).
+-- An order that has been pending longer than fn_order_hold_minutes() can no longer be paid
+--                        (pc_expire_orders fails it within a minute).
 -- p_payment_success = 0: the order becomes 'failed'; trg_orders_au then releases its seats.
 --                        p_pay_method is ignored in that case and may be NULL.
 CREATE PROCEDURE pc_pay_order(
@@ -14,6 +16,7 @@ CREATE PROCEDURE pc_pay_order(
 )
 BEGIN
   DECLARE v_status     VARCHAR(10);
+  DECLARE v_place_at   DATETIME;
   DECLARE v_ticket_cnt INT;
 
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -25,13 +28,17 @@ BEGIN
   START TRANSACTION;
 
   -- Lock the order row so two payments cannot run at the same time
-  SELECT status INTO v_status FROM orders WHERE order_id = p_order_id FOR UPDATE;
+  SELECT status, place_at INTO v_status, v_place_at FROM orders WHERE order_id = p_order_id FOR UPDATE;
 
   IF v_status IS NULL THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order not found';
   END IF;
   IF v_status <> 'pending' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only pending orders can be paid';
+  END IF;
+
+  IF p_payment_success = 1 AND NOW() >= v_place_at + INTERVAL fn_order_hold_minutes() MINUTE THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'This order has expired, please book again';
   END IF;
 
   SELECT COUNT(*) INTO v_ticket_cnt FROM ticket WHERE order_id = p_order_id;

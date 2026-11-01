@@ -23,6 +23,7 @@ BEGIN
   DECLARE v_i           INT DEFAULT 0;
   DECLARE v_discount    INT DEFAULT 0;
   DECLARE v_price       DECIMAL(12,2);
+  DECLARE v_expired     INT;
 
   -- On any error: undo everything, then re-raise the original error to the caller
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -32,6 +33,9 @@ BEGIN
   END;
 
   SET p_order_id = NULL;
+
+  -- Release the seats of unpaid orders that timed out (also done every minute by ev_expire_orders)
+  CALL pc_expire_orders(v_expired);
 
   -- Validate input
   IF p_quantity IS NULL OR p_quantity NOT BETWEEN 1 AND 2 THEN

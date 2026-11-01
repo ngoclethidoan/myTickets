@@ -30,6 +30,7 @@
     {% if o.status == 'paid' %}
     <p class="muted small">Paid by {{ o.pay_method }}{% if o.pay_date %} on {{ o.pay_date|stamp }}{% endif %}. Paid orders are locked.</p>
     {% elif o.status == 'pending' %}
+    <p class="note note-amber">Pay before {{ o.expires|stamp }}. Unpaid orders are cancelled automatically after {{ hold_minutes }} minutes and the seats are released.</p>
     <div class="actions">
       {% if pay_open == o.id %}
       <form method="post" action="{{ url_for('pay_order', order_id=o.id) }}" class="inline-form">
