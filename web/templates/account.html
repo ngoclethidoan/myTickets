@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Account and membership{% endblock %}
+{% block content %}
+<main>
+  <div class="wrap">
+    <div class="page-head"><h1>{{ profile.name }}</h1><p>Signed in as {{ profile.username }}, customer {{ profile.customer_id }}.</p></div>
+
+    <section class="rank on-ink" aria-label="Membership">
+      <div class="rank-top">
+        <div>
+          <p class="small" style="opacity:.75;margin-bottom:6px">Your membership rank</p>
+          <p class="rank-name">{{ member.tier_name }}</p>
+        </div>
+        <dl class="rank-facts">
+          <div><dt>Discount on every ticket</dt><dd>{{ member.discount_percent }}%</dd></div>
+          <div><dt>Paid so far</dt><dd>{{ member.spent|vnd }}</dd></div>
+          <div><dt>Tickets bought</dt><dd>{{ totals.tickets }} for {{ totals.events }} show{{ 's' if totals.events != 1 }}</dd></div>
+        </dl>
+      </div>
+      <ol class="ladder">
+        {% set here = namespace(passed=false) %}
+        {% for t in tiers %}
+        <li class="{{ 'reached' if not here.passed }} {{ 'here' if t.tier_name == member.tier_name }}">
+          <b>{{ t.tier_name }}</b>
+          <span>{{ t.discount_percent }}% off, from {{ t.min_spent|vnd }}</span>
+        </li>
+        {% if t.tier_name == member.tier_name %}{% set here.passed = true %}{% endif %}
+        {% endfor %}
+      </ol>
+      <p class="rank-next">{% if member.next_tier %}Pay {{ member.missing|vnd }} more for tickets to reach {{ member.next_tier }}. Only paid orders count.{% else %}You are at the top rank.{% endif %}</p>
+    </section>
+
+    <div class="cols">
+      <section class="sheet">
+        <h2>Profile</h2>
+        {% if not can_edit %}<p class="note note-warn" style="margin-bottom:14px">Editing is switched off until the database update has been run (database/upgrade_existing_db.sql).</p>{% endif %}
+        <form method="post" action="{{ url_for('account_profile') }}" class="stack">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <div class="field"><label for="name">Full name</label>
+            <input id="name" name="name" autocomplete="name" maxlength="100" value="{{ profile.name }}" required {{ 'disabled' if not can_edit }}>
+            <span class="hint">Printed on your tickets.</span></div>
+          <div class="field"><label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" maxlength="100" value="{{ profile.email }}" required {{ 'disabled' if not can_edit }}></div>
+          <div class="field"><label for="phone_num">Phone number, optional</label>
+            <input id="phone_num" name="phone_num" type="tel" autocomplete="tel" maxlength="20" value="{{ profile.phone_num or '' }}" {{ 'disabled' if not can_edit }}></div>
+          <div><button class="btn" type="submit" {{ 'disabled' if not can_edit }}>Save profile</button></div>
+        </form>
+      </section>
+      <section class="sheet">
+        <h2>Password</h2>
+        <form method="post" action="{{ url_for('account_password') }}" class="stack">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <input type="text" name="username" value="{{ profile.username }}" autocomplete="username" hidden>
+          <div class="field"><label for="current">Current password</label>
+            <input id="current" name="current" type="password" autocomplete="current-password" required {{ 'disabled' if not can_edit }}></div>
+          <div class="field"><label for="password">New password</label>
+            <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required {{ 'disabled' if not can_edit }}>
+            <span class="hint">At least 8 characters.</span></div>
+          <div class="field"><label for="confirm">New password again</label>
+            <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required {{ 'disabled' if not can_edit }}></div>
+          <div><button class="btn" type="submit" {{ 'disabled' if not can_edit }}>Change password</button></div>
+        </form>
+      </section>
+    </div>
+  </div>
+</main>
+{% endblock %}

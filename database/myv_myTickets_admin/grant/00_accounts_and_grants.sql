@@ -1,5 +1,5 @@
 -- ==========================================================
--- 01_accounts_and_grants.sql : two MySQL accounts, each with the minimum rights it needs
+-- 00_accounts_and_grants.sql : two MySQL accounts, each with the minimum rights it needs
 --
 -- Run this LAST, after both databases are fully built (tables, view, function, procedures),
 -- because GRANT only works on objects that already exist.
@@ -33,6 +33,9 @@ GRANT EXECUTE ON PROCEDURE myv_myTickets.pc_pay_order       TO 'customer_app'@'%
 GRANT EXECUTE ON PROCEDURE myv_myTickets.pc_cancel_order    TO 'customer_app'@'%';
 GRANT EXECUTE ON PROCEDURE myv_myTickets.pc_available_seats TO 'customer_app'@'%';
 GRANT EXECUTE ON FUNCTION  myv_myTickets.fn_available_seats TO 'customer_app'@'%';
+GRANT EXECUTE ON FUNCTION  myv_myTickets.fn_standing_left   TO 'customer_app'@'%';
+-- Edit the own profile and change the password: only through this procedure (no UPDATE right on customer)
+GRANT EXECUTE ON PROCEDURE myv_myTickets.pc_update_customer TO 'customer_app'@'%';
 
 -- ----------------------------------------------------------
 -- admin_app : used by the app when an ADMIN is logged in. Sees the admin database plus a few reads on the main one.
@@ -42,10 +45,11 @@ CREATE USER IF NOT EXISTS 'admin_app'@'%' IDENTIFIED BY 'CHANGE_ME_admin_passwor
 -- Sign in and read the audit log
 GRANT SELECT ON myv_myTickets_admin.admin     TO 'admin_app'@'%';
 GRANT SELECT ON myv_myTickets_admin.audit_log TO 'admin_app'@'%';
--- Add events and read stats: only through these procedures
+-- Add, edit and delete events and read stats: only through these procedures
 GRANT EXECUTE ON PROCEDURE myv_myTickets_admin.pc_add_event   TO 'admin_app'@'%';
 GRANT EXECUTE ON PROCEDURE myv_myTickets_admin.pc_event_stats TO 'admin_app'@'%';
 GRANT EXECUTE ON PROCEDURE myv_myTickets_admin.pc_delete_event TO 'admin_app'@'%';
+GRANT EXECUTE ON PROCEDURE myv_myTickets_admin.pc_update_event TO 'admin_app'@'%';
 -- Read-only access to the main database, for the dashboard forms and the free-seat list
 GRANT SELECT ON myv_myTickets.event TO 'admin_app'@'%';
 GRANT SELECT ON myv_myTickets.venue TO 'admin_app'@'%';

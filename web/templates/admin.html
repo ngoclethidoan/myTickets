@@ -1,108 +1,115 @@
 {% extends "base.html" %}
-{% block title %}Admin · myTickets{% endblock %}
+{% import "_parts.html" as parts %}
+{% block title %}Events, myTickets admin{% endblock %}
+{% macro event_rows(list) %}
+{% for e in list %}
+<tr>
+  <td>
+    <div class="ev-cell">
+      {% if e.img %}<img class="thumb" src="{{ e.img }}" alt="">{% else %}<span class="thumb" aria-hidden="true">{{ e.event_id[2:] }}</span>{% endif %}
+      <div><a href="{{ url_for('admin_event', event_id=e.event_id) }}">{{ e.event_name }}</a><small>{{ e.event_id }}, {{ e.venue }}</small></div>
+    </div>
+  </td>
+  <td class="nowrap">{{ e.start_time|dt('%d %b %Y, %H:%M') }}</td>
+  <td>{{ parts.state_sticker(e.state) }}</td>
+  <td>
+    <div class="bar" role="img" aria-label="{{ e.stats.tickets_paid }} paid and {{ e.stats.tickets_pending }} held of {{ e.stats.capacity }}"><i class="paid" style="width:{{ e.stats.paid_pct }}%"></i><i class="pending" style="width:{{ e.stats.pending_pct }}%"></i></div>
+  </td>
+  <td class="r">{{ e.stats.tickets_paid }}</td>
+  <td class="r">{{ e.stats.tickets_pending }}</td>
+  <td class="r">{{ e.stats.free }}</td>
+  <td class="r nowrap">{{ e.stats.revenue|vnd }}</td>
+</tr>
+{% endfor %}
+{% endmacro %}
 {% block content %}
-<main class="page">
-  <h1>Admin dashboard</h1>
-
-  <section class="card stack">
-    <h2>Event stats</h2>
-    {% if events %}
-    <form method="get" class="inline-form">
-      <label class="sr-only" for="event">Event</label>
-      <select id="event" name="event" onchange="this.form.submit()">
-        {% for e in events %}<option value="{{ e.event_id }}" {{ 'selected' if e.event_id == chosen }}>{{ e.event_id }} · {{ e.event_name }}</option>{% endfor %}
-      </select>
-      <noscript><button class="btn-outline" type="submit">Show</button></noscript>
-    </form>
-    {% if stats %}
-    <div class="stats">
-      <div><span class="muted small">Tickets paid</span><strong>{{ stats.tickets_paid }}</strong></div>
-      <div><span class="muted small">Tickets pending</span><strong>{{ stats.tickets_pending }}</strong></div>
-      <div><span class="muted small">Revenue</span><strong>{{ stats.revenue|vnd }}</strong></div>
-      <div><span class="muted small">Seats left</span><strong>{{ stats.seats_left }}</strong></div>
-      <div><span class="muted small">Standing left</span><strong>{{ stats.standing_left }}</strong></div>
-    </div>
-    {% endif %}
-
-    <h3>Poster</h3>
-    <div class="poster-row">
-      {% if poster %}<img class="poster-thumb" src="{{ poster }}?v={{ range(1, 10**6) | random }}" alt="Poster of {{ chosen }}">{% else %}<span class="muted small">No poster yet for {{ chosen }}.</span>{% endif %}
-      {% if can_add %}
-      <form method="post" action="{{ url_for('admin_set_poster', event_id=chosen) }}" enctype="multipart/form-data" class="inline-form">
-        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <label class="sr-only" for="poster-replace">Poster image</label>
-        <input id="poster-replace" name="poster" type="file" accept="image/jpeg,image/png,image/webp" required>
-        <button class="btn-outline" type="submit">{{ 'Replace poster' if poster else 'Upload poster' }}</button>
-      </form>
-      {% endif %}
+<main>
+  <div class="wrap">
+    <div class="page-head row row-end">
+      <div><h1>Events</h1><p>Sales of every show, straight from the database.</p></div>
+      {% if can_add %}<a class="btn" href="#add">Add an event</a>{% endif %}
     </div>
 
-    {% if can_add %}
-    <h3>Delete event</h3>
-    {% if delete_block %}
-      <p class="muted small">{{ delete_block }}</p>
-    {% else %}
-      <form method="post" action="{{ url_for('admin_delete_event', event_id=chosen) }}" class="inline-form"
-            onsubmit="return confirm('Delete event {{ chosen }} for good? This cannot be undone.');">
-        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <button class="btn-outline btn-danger" type="submit">Delete {{ chosen }}</button>
-        <span class="muted small">No tickets and not started yet, so it can be removed.</span>
-      </form>
-    {% endif %}
-    {% endif %}
+    <dl class="figures">
+      <div><dt>Revenue from paid tickets</dt><dd>{{ totals.revenue|vnd }}</dd></div>
+      <div><dt>Tickets paid</dt><dd>{{ totals.paid }}</dd></div>
+      <div><dt>Tickets held, not paid yet</dt><dd>{{ totals.pending }}</dd></div>
+      <div><dt>Shows on sale</dt><dd>{{ totals.open }}<small>of {{ totals.upcoming }} upcoming</small></dd></div>
+    </dl>
 
-    <h3>Free seats</h3>
-    <form method="get" class="inline-form">
-      <input type="hidden" name="event" value="{{ chosen }}">
-      <label class="sr-only" for="zone">Zone</label>
-      <select id="zone" name="zone" onchange="this.form.submit()">
-        <option value="">All zones</option>
-        {% for key, label in zone_options %}<option value="{{ key }}" {{ 'selected' if zone == key }}>{{ label }}</option>{% endfor %}
-      </select>
-    </form>
-    {% if seats %}
-    <table>
-      <thead><tr><th>Seat</th><th>Zone</th><th>Row</th><th>Number</th></tr></thead>
-      <tbody>{% for s in seats %}<tr><td>{{ s.seat_id }}</td><td>{{ ZONE_LABEL.get(s.seat_zone, s.seat_zone) }}</td><td>{{ s.seat_row }}</td><td>{{ s.seat_number }}</td></tr>{% endfor %}</tbody>
-    </table>
-    <p class="muted small">Showing {{ seats|length }} of {{ seats_total }} free seats.</p>
-    {% else %}<p class="muted small">No free seats.</p>{% endif %}
-    {% else %}
-    <p class="muted">No events yet.</p>
-    {% endif %}
-  </section>
-
-  <section class="card stack">
-    <h2>Add event</h2>
-    {% if can_add %}
-    <form method="post" action="{{ url_for('admin_add_event') }}" class="stack" enctype="multipart/form-data">
-      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-      <div class="grid2">
-        <div class="field"><label for="event_name">Event name</label><input id="event_name" name="event_name" required></div>
-        <div class="field"><label for="artist">Artist</label><input id="artist" name="artist"></div>
-        <div class="field"><label for="venue_id">Venue</label>
-          <select id="venue_id" name="venue_id" required>{% for v in venues %}<option value="{{ v.venue_id }}">{{ v.venue_id }} · {{ v.address }}</option>{% endfor %}</select></div>
-        <div class="field"><label for="standing_capacity">Standing capacity</label><input id="standing_capacity" name="standing_capacity" type="number" min="0" value="0"></div>
-        <div class="field"><label for="sale_time">Sales open</label><input id="sale_time" name="sale_time" type="datetime-local" required></div>
-        <div class="field"><label for="start_time">Event starts</label><input id="start_time" name="start_time" type="datetime-local" required></div>
+    <section class="sheet">
+      <h2>Upcoming</h2>
+      {% if upcoming %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Event</th><th>Starts</th><th>Sales</th><th>How full</th><th class="r">Paid</th><th class="r">Held</th><th class="r">Free</th><th class="r">Revenue</th></tr></thead>
+          <tbody>{{ event_rows(upcoming) }}</tbody>
+        </table>
       </div>
-      <div class="field"><label for="poster">Poster <span class="muted">(optional, JPG, PNG or WebP, 6 MB at most)</span></label>
-        <input id="poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp"></div>
-      <button class="btn" type="submit">Create event</button>
-    </form>
-    {% else %}
-    <p class="muted">Only super admins can add events. Your account is staff.</p>
-    {% endif %}
-  </section>
+      <p class="legend"><span><i class="paid"></i>paid</span><span><i class="pending"></i>held, waiting for payment</span><span><i></i>free</span></p>
+      {% else %}
+      <p class="muted">No upcoming events.{% if can_add %} Add the first one below.{% endif %}</p>
+      {% endif %}
+    </section>
 
-  <section class="card stack">
-    <h2>Recent activity</h2>
-    {% if activity %}
-    <table>
-      <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Target</th></tr></thead>
-      <tbody>{% for a in activity %}<tr><td>{{ a.done_at|stamp }}</td><td>{{ a.username }} · {{ a.admin_id }}</td><td>{{ a.action }}</td><td>{{ a.target_id or '' }}</td></tr>{% endfor %}</tbody>
-    </table>
-    {% else %}<p class="muted small">Nothing logged yet.</p>{% endif %}
-  </section>
+    {% if past %}
+    <section class="sheet">
+      <h2>Past</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Event</th><th>Started</th><th>Sales</th><th>How full</th><th class="r">Paid</th><th class="r">Held</th><th class="r">Free</th><th class="r">Revenue</th></tr></thead>
+          <tbody>{{ event_rows(past) }}</tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    <div class="cols" style="margin-top:22px">
+      <section class="sheet" id="add">
+        <h2>Add an event</h2>
+        {% if can_add %}
+        <form method="post" action="{{ url_for('admin_add_event') }}" class="stack" enctype="multipart/form-data">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <div class="field"><label for="event_name">Event name</label><input id="event_name" name="event_name" maxlength="150" required></div>
+          <div class="field"><label for="artist">Artist, optional</label><input id="artist" name="artist" maxlength="150"></div>
+          <div class="field"><label for="venue_id">Venue</label>
+            <select id="venue_id" name="venue_id" required>
+              {% for v in venues %}<option value="{{ v.venue_id }}">{{ v.address }}{% if venue_zones.get(v.address) %}: {{ venue_zones[v.address]|join(', ') }}{% endif %}</option>{% endfor %}
+            </select>
+            <span class="hint">The venue decides the zones and cannot be changed later.</span></div>
+          <div class="grid2">
+            <div class="field"><label for="sale_time">Sales open</label><input id="sale_time" name="sale_time" type="datetime-local" required></div>
+            <div class="field"><label for="start_time">Show starts</label><input id="start_time" name="start_time" type="datetime-local" required></div>
+          </div>
+          <div class="field"><label for="standing_capacity">Standing tickets</label><input id="standing_capacity" name="standing_capacity" type="number" min="0" value="0">
+            <span class="hint">0 means no standing area for this show.</span></div>
+          <div class="field"><label for="poster">Poster, optional</label>
+            <input id="poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp">
+            <span class="hint">JPG, PNG or WebP, 6 MB at most. Portrait works best.</span></div>
+          <div><button class="btn" type="submit">Create event</button></div>
+        </form>
+        {% else %}
+        <p class="muted">Only super admins can add events. Your account is staff, so you can read the numbers and check tickets.</p>
+        {% endif %}
+      </section>
+
+      <section class="sheet">
+        <h2>Recent admin activity</h2>
+        {% if activity %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+            <tbody>
+              {% for a in activity %}
+              <tr><td class="nowrap">{{ a.done_at|stamp }}</td><td>{{ a.username }}</td>
+                <td>{{ {'ADD_EVENT': 'Added', 'UPDATE_EVENT': 'Edited', 'DELETE_EVENT': 'Deleted'}.get(a.action, a.action) }} {{ a.target_id or '' }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}<p class="muted">Nothing has been logged yet. Adding, editing and deleting events shows up here.</p>{% endif %}
+      </section>
+    </div>
+  </div>
 </main>
 {% endblock %}

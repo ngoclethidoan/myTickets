@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<main>
+  <div class="wrap">
+    <div class="tk oops">
+      <div class="tk-main">
+        <h1>{{ title }}</h1>
+        <p>{{ text }}</p>
+        <a class="btn" href="{{ url_for('admin_dashboard' if user and user.role == 'admin' else 'home') }}">{{ 'Back to events' if user and user.role == 'admin' else 'See all shows' }}</a>
+      </div>
+      <div class="tk-stub" aria-hidden="true"><b>{{ code }}</b></div>
+    </div>
+  </div>
+</main>
+{% endblock %}

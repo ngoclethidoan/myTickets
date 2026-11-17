@@ -3,30 +3,38 @@
 A concert ticket-selling system for the database course CS311V (Individual).
 Three tiers: **MySQL** (Aiven) → **Python Flask** → **HTML/CSS** in the browser.
 
-Customers browse events, pick a zone on the venue map, book up to 2 tickets per event, pay and cancel.
-Admins (staff and super admin) use a separate dashboard with their own database.
+Anyone can browse shows, see prices and what is left. Customers pick a zone on the venue map, book up to
+2 tickets per event, pay within 15 minutes and get a ticket with a QR code. Admins (staff and super admin)
+use separate pages with their own database.
 
 ## Repository layout
 
 ```
 myTickets/
-├── main/                 SQL for the MAIN database (myv_myTickets)
-│   ├── 00_run_main.sql   everything below in one script (tables → function → view → triggers → procedures)
-│   ├── 01..08_*.sql      tables: venue, seat, event, customer, orders, ticket
-│   ├── trg_*.sql         triggers (ids, validation, locking of paid orders, ticket limits, event delete guard)
-│   ├── pc_*.sql          procedures: book tickets, pay, cancel, list free seats
-│   └── fn_*.sql, vw_*.sql
-├── admin/                SQL for the ADMIN database (myv_myTickets_admin)
-│   ├── 01_admin.sql, 02_audit_log.sql, trg_admin_bi.sql
-│   └── pc_add_event.sql, pc_event_stats.sql, pc_delete_event.sql
-├── security/
-│   └── 01_accounts_and_grants.sql   the two limited MySQL accounts and what each may do
-└── myticket_app/         Flask web app
+├── database/
+│   ├── install_all.sql            NEW installation: both databases in one script (generated)
+│   ├── upgrade_existing_db.sql    for a database that is ALREADY running: adds the 3 newest objects (generated)
+│   ├── build_install.py           rebuilds the two files above from the single files
+│   ├── myv_myTickets/             MAIN database, one object per file
+│   │   ├── table/                 01_venue … 07_ticket (the numbers are the creation order)
+│   │   ├── function/              fn_available_seats, fn_standing_left, fn_order_hold_minutes
+│   │   ├── view/                  vw_order_history, vw_customer_membership
+│   │   ├── trigger/               ids, validation, locking of paid orders, ticket limits, event delete guard
+│   │   ├── procedure/             book, pay, cancel, expire, list free seats, update customer
+│   │   └── ev_expire_orders.sql   scheduled event: fails unpaid orders every minute
+│   ├── myv_myTickets_admin/       ADMIN database
+│   │   ├── table/                 01_admin, 02_audit_log
+│   │   ├── trigger/               trg_admin_bi
+│   │   ├── procedure/             pc_add_event, pc_update_event, pc_delete_event, pc_event_stats
+│   │   └── grant/                 00_accounts_and_grants.sql (run it LAST)
+│   ├── sample_data/               venues + seats and a few events, for an empty database only
+│   └── _unused/                   three old files that are not part of the design (see its README)
+└── web/                           Flask web app
     ├── app.py, db.py, create_admin.py
-    ├── templates/        HTML pages (+ templates/maps/ : one SVG seat map per venue)
-    ├── static/           style.css, static/events/<event_id>.jpg (posters)
+    ├── templates/                 HTML pages (+ templates/maps/ : one SVG seat map per venue)
+    ├── static/                    style.css, app.js, fonts/, events/<event_id>.jpg (posters)
     ├── requirements.txt
-    └── .env.example      copy to .env (never commit .env)
+    └── .env.example               copy to .env (never commit .env)
 ```
 
 ## Database design
@@ -35,7 +43,7 @@ Two databases live in one Aiven MySQL service (both `utf8mb4_unicode_ci`).
 
 | Database | Tables | Who touches it |
 |---|---|---|
-| `myv_myTickets` (main) | `venue`, `seat`, `event`, `customer`, `orders`, `ticket` | customers, and admins only through procedures |
+| `myv_myTickets` (main) | `venue`, `seat`, `event`, `membership_tier`, `customer`, `orders`, `ticket` | customers, and admins only through procedures |
 | `myv_myTickets_admin` (admin) | `admin`, `audit_log` | admins only |
 
 Customers can never see the admin database. Staff and super admins are told apart by `admin.level`.
@@ -46,53 +54,80 @@ Customers can never see the admin database. Staff and super admins are told apar
 - **At most 2 tickets per customer per event**, all zones together (pending + paid orders count).
 - **One order = one ticket type (zone).** Two zones means two orders.
 - Tickets can only be bought while `sale_time <= now < start_time`.
+- **An unpaid order lives for 15 minutes** (`fn_order_hold_minutes`). After that it becomes `failed` and its seats
+  are free again. `ev_expire_orders` does this every minute, and `pc_book_tickets` does it too before it books,
+  so seats are released even when the event scheduler is off.
 - A paid order is locked: it cannot be edited, cancelled or deleted.
 - Cancelling an unpaid order removes its tickets, so the seats become free again.
 - `STANDING` has no real seats: virtual seats are created per event from `standing_capacity`.
+- **Membership.** A customer's rank (`membership_tier`: Bronze, Silver, Gold, Platinum) is not stored. It is
+  computed from what they have paid (`vw_customer_membership`), and `pc_book_tickets` takes the rank's discount
+  off the list price.
 - Event deletion is allowed only when the event has **no tickets** and has **not started**
   (trigger `trg_event_bd`), and only a super admin may do it (`pc_delete_event`).
+- An event can be edited until it starts, by a super admin (`pc_update_event`). The venue never changes, and
+  standing capacity cannot go below the standing tickets already booked.
 - A username cannot be both a customer and an admin.
 
-### Procedures
+### Procedures and functions
 
-| Procedure | Database | Purpose |
+| Routine | Database | Purpose |
 |---|---|---|
-| `pc_book_tickets` | main | book 1–2 tickets of one zone (creates the order) |
+| `pc_book_tickets` | main | book 1–2 tickets of one zone (creates the order, applies the discount) |
 | `pc_pay_order` | main | pay a pending order |
 | `pc_cancel_order` | main | cancel an unpaid order |
-| `pc_available_seats` / `fn_available_seats` | main | free seats of an event |
+| `pc_expire_orders` | main | fail the orders that were not paid in time (owner only) |
+| `pc_update_customer` | main | change name, email, phone and password of a customer |
+| `pc_available_seats` / `fn_available_seats` | main | free numbered seats of an event |
+| `fn_standing_left` | main | standing tickets left of an event |
 | `pc_add_event` | admin | create an event (super admin only), writes `audit_log` |
+| `pc_update_event` | admin | edit an event (super admin only), writes `audit_log` |
 | `pc_delete_event` | admin | delete an event (super admin only), writes `audit_log` |
 | `pc_event_stats` | admin | tickets paid/pending, revenue, seats left (any admin) |
 
 ## Security model
 
-- Two limited MySQL accounts, created by `security/01_accounts_and_grants.sql`:
-  - `customer_app`: main database only (read events/venues/own order history, insert customers, run the booking procedures).
-  - `admin_app`: admin database (read `admin` and `audit_log`, run the admin procedures) plus a few reads on the main database.
-- Neither account can `DELETE` or `UPDATE` tables directly. Changes go through procedures that run with definer rights.
+- Two limited MySQL accounts, created by `database/myv_myTickets_admin/grant/00_accounts_and_grants.sql`:
+  - `customer_app`: main database only (read events/venues/own order history, insert customers, run the
+    booking procedures and `pc_update_customer`).
+  - `admin_app`: admin database (read `admin` and `audit_log`, run the admin procedures) plus a few reads on
+    the main database.
+- Neither account can `DELETE` or `UPDATE` tables directly. Changes go through procedures that run with
+  definer rights.
 - Web passwords are stored as werkzeug hashes. MySQL account passwords are connection secrets kept in `.env`.
-- Flask: signed sessions, CSRF token on every POST, generic sign-in error, safe `next` redirect, upload checks for posters.
+- Flask: signed sessions, CSRF token on every POST, generic sign-in error, safe `next` redirect, upload checks
+  for posters, `nosniff` / frame / referrer headers.
 - Every admin action that changes data is written to `audit_log`.
+- **Ticket codes.** The QR code of a ticket holds `event.seat.order.signature`. The signature is an HMAC made
+  with `SECRET_KEY`, so a code cannot be invented. Admins verify a code on *Check a ticket*.
 - **Dropping and recreating a procedure or function removes its grants.** After re-running any `pc_*.sql` or
-  `fn_*.sql`, run the matching `GRANT EXECUTE` lines from `security/01_accounts_and_grants.sql` again.
+  `fn_*.sql` (or `install_all.sql`), run the matching `GRANT EXECUTE` lines from `00_accounts_and_grants.sql`
+  again.
 
 ## Setup
 
-### 1. Database (run as the owner account, e.g. `avnadmin`)
+### 1a. A new database (run as the owner account, e.g. `avnadmin`)
 
-1. Create the two databases: `myv_myTickets` and `myv_myTickets_admin`.
-2. Select **`myv_myTickets_admin`** and run `admin/01_admin.sql`, `admin/02_audit_log.sql`,
-   `admin/trg_admin_bi.sql`, `admin/pc_add_event.sql`, `admin/pc_event_stats.sql`, `admin/pc_delete_event.sql`.
-3. Select **`myv_myTickets`** and run `main/00_run_main.sql` as a script.
-   (Check the selected database first. Running it in the admin database creates stray copies.)
-4. Edit the passwords in `security/01_accounts_and_grants.sql` (`CHANGE_ME_*`) and run it.
-5. Insert venues and seats, then events (or add events from the admin dashboard).
+1. Open `database/install_all.sql` and run it as one script. It creates both databases and everything in them.
+2. Edit the two passwords in `database/myv_myTickets_admin/grant/00_accounts_and_grants.sql` (`CHANGE_ME_*`)
+   and run it.
+3. Optional: run `database/sample_data/01_venues_and_seats.sql`, then `02_events.sql`.
+   They only insert into empty tables, so they cannot damage existing data.
+4. Check that the scheduler is on: `SHOW VARIABLES LIKE 'event_scheduler';`
+
+### 1b. A database that is already running
+
+Run `database/upgrade_existing_db.sql` once as the owner. It only **adds** `fn_standing_left`,
+`pc_update_customer` and `pc_update_event` and grants `EXECUTE` on them. No table, no data and no existing
+routine is touched.
+
+Until it has run, the web app still works. It notices that the three routines are missing and switches off
+exactly these things: "N left" for standing tickets, editing the profile and password, editing an event.
 
 ### 2. Web app
 
 ```bash
-cd myticket_app
+cd web
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -107,18 +142,28 @@ Admin levels are `staff` or `super_admin`. The web app cannot create admins.
 
 ## Using the app
 
-- **Customer**: sign up, open an event, click a zone on the map (or pick it from the list), choose 1–2 tickets,
-  then pay or cancel from *My orders*.
-- **Staff**: sign in on the same page, see event stats, free seats and recent activity.
-- **Super admin**: everything staff can do, plus add events, upload or replace posters, delete events.
+- **Guest**: browse and search shows, open a show, see the map, prices and what is left.
+- **Customer**: sign up, pick a zone on the map (or in the list), choose 1–2 tickets and place the order.
+  *Orders* shows the countdown and takes the payment. Paid tickets appear under *My tickets* with a QR code
+  and can be printed. *Account and membership* shows the rank and lets you edit the profile and password.
+- **Staff**: sign in on the same page. See sales of every event, free seats by zone, recent admin activity,
+  and check ticket codes.
+- **Super admin**: everything staff can do, plus add, edit and delete events and upload or replace posters.
 
 Posters are stored as `static/events/<event_id>.jpg` (the name comes from the event id, never from the upload).
-Venue maps are `templates/maps/<venue-name-slug>.html`; zones available per venue are listed in `VENUE_ZONES` in `app.py`.
-Ticket prices are constants in `PRICES` in `app.py`.
+An event without a poster gets a typeset placeholder.
+Venue maps are `templates/maps/<venue-name-slug>.html`; zones available per venue are listed in `VENUE_ZONES`
+in `app.py`. Ticket prices are constants in `PRICES` in `app.py`.
+
+The fonts are served from `static/fonts/`, so the pages look the same without an internet connection.
 
 ## Known limitations
 
-- Prices are not stored in the database.
-- Customers see exact seat availability for numbered zones only, not for standing.
+- Prices are not stored in the database. `pc_book_tickets` receives the list price from the web app.
+- All times are the database server's clock. Aiven runs on UTC unless the service time zone is changed, so
+  `sale_time` and `start_time` are compared with UTC `NOW()`.
+- Checking a ticket code proves the code is genuine. It does not record that the ticket was used.
+- Changing `SECRET_KEY` invalidates ticket codes that were already shown or printed.
 - A venue without an entry in `VENUE_ZONES` or without a map file falls back to a plain zone list.
-- The database cannot verify that `p_admin_id` really belongs to the person calling; the web app takes it from the signed session.
+- The database cannot verify that `p_admin_id` / `p_customer_id` really belongs to the person calling; the web
+  app takes it from the signed session.

@@ -1,8 +1,9 @@
 {% extends "auth_base.html" %}
-{% block title %}Sign in · myTickets{% endblock %}
+{% block title %}Sign in to myTickets{% endblock %}
 {% block form %}
 <h1>Sign in</h1>
 {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+{% for category, message in get_flashed_messages(with_categories=true) %}<p class="note" role="status">{{ message }}</p>{% endfor %}
 <form method="post" class="stack">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
@@ -10,8 +11,8 @@
     <input id="username" name="username" type="text" autocomplete="username" value="{{ username }}" required autofocus></div>
   <div class="field"><label for="password">Password</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required></div>
-  <button class="btn btn-block" type="submit">Sign in</button>
+  <button class="btn btn-big btn-block" type="submit">Sign in</button>
 </form>
-<p class="muted">New to myTickets? <a class="hl" href="{{ url_for('signup') }}">Sign up</a></p>
-<p class="muted small">Admins sign in here too and are taken to the dashboard.</p>
+<p>New to myTickets? <a class="link" href="{{ url_for('signup', next=next_url) if next_url else url_for('signup') }}">Create an account</a></p>
+<p class="muted small">Staff and admins sign in here too and land on the admin pages.</p>
 {% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% import "_parts.html" as parts %}
+{% block title %}{{ ev.event_name }}, myTickets admin{% endblock %}
+{% block content %}
+<main>
+  <div class="wrap">
+    <a class="back" href="{{ url_for('admin_dashboard') }}">All events</a>
+    <div class="page-head">
+      <p style="margin:0 0 10px">{{ parts.state_sticker(ev.state) }}</p>
+      <h1>{{ ev.event_name }}</h1>
+      <p>{% if ev.artist %}{{ ev.artist }}, {% endif %}{{ ev.venue }}. Starts {{ ev.start_time|stamp }}. Sales {{ 'opened' if ev.state != 'soon' else 'open' }} {{ ev.sale_time|stamp }}. Event {{ ev.event_id }}.</p>
+    </div>
+
+    <dl class="figures">
+      <div><dt>Revenue from paid tickets</dt><dd>{{ stats.revenue|vnd }}</dd></div>
+      <div><dt>Tickets paid</dt><dd>{{ stats.tickets_paid }}</dd></div>
+      <div><dt>Tickets held, not paid yet</dt><dd>{{ stats.tickets_pending }}</dd></div>
+      <div><dt>Still free</dt><dd>{{ stats.free }}<small>of {{ stats.capacity }}</small></dd></div>
+    </dl>
+
+    <section class="sheet">
+      <h2>How full it is</h2>
+      <div class="bar bar-lg" role="img" aria-label="{{ stats.tickets_paid }} paid, {{ stats.tickets_pending }} held, {{ stats.free }} free"><i class="paid" style="width:{{ stats.paid_pct }}%"></i><i class="pending" style="width:{{ stats.pending_pct }}%"></i></div>
+      <p class="legend"><span><i class="paid"></i>{{ stats.tickets_paid }} paid</span><span><i class="pending"></i>{{ stats.tickets_pending }} held, waiting for payment</span><span><i></i>{{ stats.seats_left }} numbered seats free</span>{% if ev.standing_capacity %}<span><i></i>{{ stats.standing_left }} of {{ ev.standing_capacity }} standing free</span>{% endif %}</p>
+
+      <h3 style="margin:26px 0 12px">Free numbered seats by zone</h3>
+      {% if free_by_zone %}
+      <div class="zone-free">
+        <a href="{{ url_for('admin_event', event_id=ev.event_id) }}" {% if not zone %}aria-current="true"{% endif %}>All zones<b>{{ stats.seats_left }}</b></a>
+        {% for key, label, n in free_by_zone %}
+        <a class="zone-{{ key|lower }}" href="{{ url_for('admin_event', event_id=ev.event_id, zone=key) }}" {% if zone == key %}aria-current="true"{% endif %}><span class="chip" aria-hidden="true"></span>{{ label }}<b>{{ n }}</b></a>
+        {% endfor %}
+      </div>
+      <details style="margin-top:14px">
+        <summary class="btn-quiet" style="display:inline-block;cursor:pointer">List the free seats{% if zone %} in {{ ZONE_LABEL.get(zone, zone) }}{% endif %}</summary>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Seat id</th><th>Zone</th><th>Row</th><th>Number</th></tr></thead>
+            <tbody>{% for s in seats %}<tr><td>{{ s.seat_id }}</td><td>{{ ZONE_LABEL.get(s.seat_zone, s.seat_zone) }}</td><td>{{ s.seat_row }}</td><td>{{ s.seat_number }}</td></tr>{% endfor %}</tbody>
+          </table>
+        </div>
+        {% if seats_total > seats|length %}<p class="muted small" style="margin-top:8px">The first {{ seats|length }} of {{ seats_total }} free seats, front rows first.</p>{% endif %}
+      </details>
+      {% else %}
+      <p class="muted">No numbered seat is free.</p>
+      {% endif %}
+    </section>
+
+    <div class="cols" style="margin-top:22px">
+      <section class="sheet">
+        <h2>Edit the event</h2>
+        {% if can_edit %}
+        <form method="post" action="{{ url_for('admin_edit_event', event_id=ev.event_id) }}" class="stack">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <div class="field"><label for="event_name">Event name</label><input id="event_name" name="event_name" maxlength="150" value="{{ ev.event_name }}" required></div>
+          <div class="field"><label for="artist">Artist, optional</label><input id="artist" name="artist" maxlength="150" value="{{ ev.artist or '' }}"></div>
+          <div class="grid2">
+            <div class="field"><label for="sale_time">Sales open</label><input id="sale_time" name="sale_time" type="datetime-local" value="{{ ev.sale_time|local_input }}" required></div>
+            <div class="field"><label for="start_time">Show starts</label><input id="start_time" name="start_time" type="datetime-local" value="{{ ev.start_time|local_input }}" required></div>
+          </div>
+          <div class="field"><label for="standing_capacity">Standing tickets</label><input id="standing_capacity" name="standing_capacity" type="number" min="0" value="{{ ev.standing_capacity }}">
+            <span class="hint">Cannot go below the standing tickets already booked ({{ ev.standing_capacity - (stats.standing_left or 0) }}).</span></div>
+          <p class="hint">The venue ({{ ev.venue }}) cannot be changed, because booked seats belong to it.</p>
+          <div><button class="btn" type="submit">Save changes</button></div>
+        </form>
+        {% elif not can_add %}
+        <p class="muted">Only super admins can edit events.</p>
+        {% elif ev.state == 'ended' %}
+        <p class="muted">This show has already started, so it can no longer be edited.</p>
+        {% elif edit_missing %}
+        <p class="note note-warn">Editing is switched off until the database update has been run (database/upgrade_existing_db.sql).</p>
+        {% endif %}
+      </section>
+
+      <div>
+        <section class="sheet">
+          <h2>Poster</h2>
+          <div class="poster-row">
+            {% if poster %}<img class="poster-thumb" src="{{ poster }}" alt="Poster of {{ ev.event_name }}">{% else %}<span class="muted">No poster yet. The site shows a typeset placeholder instead.</span>{% endif %}
+            {% if can_add %}
+            <form method="post" action="{{ url_for('admin_set_poster', event_id=ev.event_id) }}" enctype="multipart/form-data" class="stack" style="gap:10px;flex:1;min-width:220px">
+              <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+              <label class="sr-only" for="poster-file">Poster image</label>
+              <input id="poster-file" name="poster" type="file" accept="image/jpeg,image/png,image/webp" required>
+              <div><button class="btn-ghost" type="submit">{{ 'Replace poster' if poster else 'Upload poster' }}</button></div>
+            </form>
+            {% endif %}
+          </div>
+        </section>
+
+        {% if can_add %}
+        <section class="sheet">
+          <h2>Delete the event</h2>
+          {% if delete_block %}
+          <p class="muted">{{ delete_block }}</p>
+          {% else %}
+          <p style="margin-bottom:14px">No tickets exist and the show has not started, so this event can be removed. This cannot be undone.</p>
+          <form method="post" action="{{ url_for('admin_delete_event', event_id=ev.event_id) }}" data-confirm="Delete {{ ev.event_id }} for good? This cannot be undone.">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="btn-ghost btn-danger" type="submit">Delete {{ ev.event_id }}</button>
+          </form>
+          {% endif %}
+        </section>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}

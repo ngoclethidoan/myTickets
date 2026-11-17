@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Check a ticket, myTickets admin{% endblock %}
+{% block content %}
+<main>
+  <div class="wrap wrap-narrow">
+    <div class="page-head">
+      <h1>Check a ticket</h1>
+      <p>Scan the QR code with any scanner app, or type the code printed under it. A code only exists for a paid order, and it carries a signature that cannot be guessed.</p>
+    </div>
+    <section class="sheet">
+      <form method="get" class="stack">
+        <div class="field"><label for="code">Ticket code</label>
+          <input id="code" name="code" value="{{ code }}" placeholder="EV01.SE0012.OD0007.9F3A2C71D0AB" autocomplete="off" autocapitalize="characters" spellcheck="false" required autofocus></div>
+        <div><button class="btn" type="submit">Check code</button></div>
+      </form>
+
+      {% if result and result.ok %}
+      <div class="result result-ok" role="status">
+        <div>
+          <h2>Genuine ticket</h2>
+          <p>This code was issued by myTickets for a paid order.</p>
+          <dl>
+            <dt>Show</dt><dd>{% if result.ev %}{{ result.ev.event_name }}{% else %}{{ result.event_id }} (this event no longer exists){% endif %}</dd>
+            {% if result.ev %}<dt>When</dt><dd>{{ result.ev.start_time|stamp }}, {{ result.ev.venue }}</dd>{% endif %}
+            <dt>Seat</dt><dd>{{ 'Standing, no assigned seat' if result.standing else result.seat_id }}</dd>
+            <dt>Order</dt><dd>{{ result.order_id }}</dd>
+          </dl>
+        </div>
+      </div>
+      {% elif result %}
+      <div class="result result-bad" role="alert">
+        <div>
+          <h2>Not a valid ticket</h2>
+          <p>The signature does not match. Check for a typo first; if the code was scanned, do not let this ticket in.</p>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+    <p class="muted small" style="margin-top:14px">The check proves the code is real. It does not record that a ticket was used, so two people showing the same code both pass.</p>
+  </div>
+</main>
+{% endblock %}

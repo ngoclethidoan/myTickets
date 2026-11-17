@@ -1,109 +1,98 @@
 {% extends "base.html" %}
-{% block title %}{{ ev.event_name }} · myTickets{% if map_tpl %}
-<script>
-(function () {
-  const ZONES = {{ zones|tojson }};
-  const info = {};
-  ZONES.forEach((z) => { info[z.key] = z; });
-  const radios = document.querySelectorAll('input[name="zone"]');
-  const shapes = document.querySelectorAll('.map .zn');
-  function sync() {
-    const picked = document.querySelector('input[name="zone"]:checked');
-    shapes.forEach((g) => g.classList.toggle('sel', !!picked && g.dataset.zone === picked.value));
-  }
-  shapes.forEach((g) => {
-    const z = info[g.dataset.zone];
-    if (!z || z.max_qty === 0) { g.classList.add('off'); }
-    g.setAttribute('tabindex', z && z.max_qty > 0 ? '0' : '-1');
-    g.setAttribute('role', 'radio');
-    g.setAttribute('aria-label', z ? z.label + ', ' + z.note : g.dataset.zone);
-    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-    title.textContent = z ? z.label + ' · ' + z.note : g.dataset.zone;
-    g.prepend(title);
-    function choose() {
-      if (!z || z.max_qty === 0) return;
-      const r = document.querySelector('input[name="zone"][value="' + g.dataset.zone + '"]');
-      if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
-    }
-    g.addEventListener('click', choose);
-    g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); choose(); } });
-  });
-  radios.forEach((r) => r.addEventListener('change', sync));
-  sync();
-})();
-</script>
-{% endif %}
-{% endblock %}
+{% import "_parts.html" as parts %}
+{% block title %}{{ ev.event_name }} at {{ ev.venue }}{% endblock %}
+{% block flash_zone %}ink{% endblock %}
 {% block content %}
-<main class="page narrow">
-  <a class="back" href="{{ url_for('home') }}">&larr; All events</a>
-  {% if poster %}<img class="banner" src="{{ poster }}" alt="Poster of {{ ev.event_name }}">{% endif %}
-  <h1>{{ ev.event_name }}</h1>
-  <p class="muted">{% if ev.artist %}{{ ev.artist }} · {% endif %}{{ ev.venue }}</p>
-  <p class="muted">Starts {{ ev.start_time|when }} · Sales open {{ ev.sale_time|when }}</p>
-
-  {% if sale == 'soon' %}<p class="note note-amber">Ticket sales have not started yet.</p>{% endif %}
-  {% if sale == 'ended' %}<p class="note note-red">This event has started. Sales are closed.</p>{% endif %}
-
-  <form method="post" action="{{ url_for('book', event_id=ev.event_id) }}" class="card stack">
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <h2>Choose a zone</h2>
-    <p class="muted small">{% if map_tpl %}Click a zone on the map or pick it from the list. {% endif %}Each account can hold up to {{ max_per_event }} tickets for this event, in total. One order covers one zone, so tickets in two different zones need two orders. Seats inside a zone are assigned automatically.</p>
-    {% if member.discount_percent %}<p class="note">Your {{ member.tier_name }} discount of {{ member.discount_percent }}% is already included in the prices below.</p>{% endif %}
-    {% if held_total %}<p class="note note-amber">You already hold {{ held_total }} ticket{{ 's' if held_total != 1 }} for this event{% if room %}, so you can add {{ room }} more{% else %} and cannot add more{% endif %}.</p>{% endif %}
-    {% if map_tpl %}<div class="map-wrap">{% include map_tpl %}</div>{% endif %}
-    <div class="zonelist" role="radiogroup" aria-label="Zones">
-      {% for z in zones %}
-      <label class="zrow {{ 'zone-off' if z.max_qty == 0 }}">
-        <input type="radio" name="zone" value="{{ z.key }}" {{ 'disabled' if z.max_qty == 0 }} required>
-        <span class="chip chip-{{ z.key|lower }}" aria-hidden="true"></span>
-        <span class="zone-name">{{ z.label }}</span>
-        <span class="zone-price">{% if z.net != z.price %}<s class="muted">{{ z.price|vnd }}</s> {% endif %}{{ z.net|vnd }}</span>
-        <span class="muted small">{{ z.note }}{% if z.held %} · you hold {{ z.held }}{% endif %}</span>
-      </label>
-      {% endfor %}
+<section class="event-top on-ink">
+  <div class="wrap">
+    <a class="back" href="{{ url_for('home') }}">All shows</a>
+    <div class="event-head">
+      {{ parts.poster(poster, ev.event_name, ev.artist or '', tint) }}
+      <div>
+        {% if sold_out %}<span class="sticker sticker-soldout">Sold out</span>
+        {% elif sale == 'open' %}<span class="sticker sticker-open">On sale</span>
+        {% elif sale == 'soon' %}<span class="sticker">Sales open {{ ev.sale_time|dt('%d %b, %H:%M') }}</span>
+        {% else %}<span class="sticker">This show has started</span>{% endif %}
+        <h1>{{ ev.event_name }}</h1>
+        {% if ev.artist %}<p class="event-artist">{{ ev.artist }}</p>{% endif %}
+        <dl class="facts">
+          <div><dt>Date</dt><dd>{{ ev.start_time|dt('%a %d %b %Y') }}</dd></div>
+          <div><dt>Starts</dt><dd>{{ ev.start_time|dt('%H:%M') }}</dd></div>
+          <div><dt>Venue</dt><dd>{{ ev.venue }}</dd></div>
+          <div><dt>Tickets from</dt><dd>{{ (zones|map(attribute='net')|min if zones else 0)|vnd }}</dd></div>
+        </dl>
+      </div>
     </div>
-    <div class="field narrow-field"><label for="qty">Tickets</label>
-      <select id="qty" name="qty">
-        {% for i in range(1, (room if room else 1) + 1) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
-      </select>
-    </div>
-    <button class="btn" type="submit" {{ 'disabled' if sale != 'open' or room == 0 }}>Place order</button>
-    <p class="muted small">Your order starts as pending. Pay it from My orders to lock the seats.</p>
-  </form>
+  </div>
+</section>
+<main style="padding-top:0">
+  <div class="wrap">
+    <form method="post" action="{{ url_for('book', event_id=ev.event_id) }}" class="tk book" id="book">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="tk-main">
+        <h2>Choose a zone</h2>
+        <p class="muted small">{% if map_tpl %}Pick a zone on the map or in the list. {% endif %}Seats inside a zone are assigned automatically, front rows first. One order covers one zone.</p>
+        {% if member and member.discount_percent %}<p class="note" style="margin-top:12px">Your {{ member.tier_name }} rank takes {{ member.discount_percent }}% off. The prices below already include it.</p>{% endif %}
+        {% if map_tpl %}<div class="map-wrap">{% include map_tpl %}</div>{% else %}<div style="height:16px"></div>{% endif %}
+        <div class="zonelist" role="radiogroup" aria-label="Zones">
+          {% for z in zones %}
+          <label class="zrow zone-{{ z.key|lower }} {{ 'zone-off' if z.sold_out or (sale == 'open' and z.max_qty == 0) }}">
+            <input type="radio" name="zone" value="{{ z.key }}" data-label="{{ z.label }}" data-net="{{ z.net }}" data-price="{{ z.price }}" data-max="{{ z.max_qty }}" data-note="{{ z.note }}" {{ 'data-soldout' if z.sold_out }} {{ 'disabled' if z.max_qty == 0 }} required>
+            <span class="zone-name">{{ z.label }}</span>
+            <span class="zone-note {{ 'low' if z.low }}">{{ z.note }}{% if z.held %}, you hold {{ z.held }}{% endif %}</span>
+            <span class="zone-price">{% if z.net != z.price %}<s>{{ z.price|vnd }}</s>{% endif %}{{ z.net|vnd }}</span>
+          </label>
+          {% else %}
+          <p class="note">This venue has no zones set up yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="tk-stub">
+        <div class="book-sticky">
+          {% if sale == 'soon' %}
+            <h3>Sales have not opened yet</h3>
+            <p>Tickets go on sale {{ ev.sale_time|dt('%A %d %B, %H:%M') }}.</p>
+            <p class="clock" data-countdown="{{ opens_in }}" data-reload="1" aria-live="off">&nbsp;</p>
+            <p class="muted small">Up to {{ max_per_event }} tickets per account for this show.</p>
+          {% elif sale == 'ended' %}
+            <h3>Sales are closed</h3>
+            <p>This show has already started, so tickets can no longer be bought.</p>
+            <a class="btn-ghost btn-block" href="{{ url_for('home') }}">See other shows</a>
+          {% elif sold_out %}
+            <h3>Sold out</h3>
+            <p>Every ticket is taken. Seats come back when someone cancels or does not pay within {{ HOLD_MINUTES }} minutes, so it is worth checking again.</p>
+            <a class="btn-ghost btn-block" href="{{ url_for('home') }}">See other shows</a>
+          {% elif user and room == 0 %}
+            <h3>You have your tickets</h3>
+            <p>You already hold {{ held_total }} ticket{{ 's' if held_total != 1 }} for this show, which is the limit for one account.</p>
+            <a class="btn btn-block" href="{{ url_for('orders') }}">Go to my orders</a>
+          {% else %}
+            <h3>Your order</h3>
+            {% if held_total %}<p class="note note-warn">You already hold {{ held_total }} ticket for this show, so you can add {{ room }} more.</p>{% endif %}
+            <div class="field">
+              <span class="label" id="qty-label">How many tickets</span>
+              <div class="seg" role="radiogroup" aria-labelledby="qty-label">
+                {% for i in range(1, max_per_event + 1) %}
+                <label><input type="radio" name="qty" value="{{ i }}" {{ 'checked' if i == 1 }} {{ 'disabled' if i > room }}><span>{{ i }}</span></label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="sum" id="sum" aria-live="polite">
+              <div><span id="sum-what">No zone chosen yet</span><span id="sum-unit"></span></div>
+              <div class="sum-total"><span>Total</span><strong id="sum-total">0 đ</strong></div>
+            </div>
+            {% if user %}
+            <button class="btn btn-big btn-block" type="submit">Place order</button>
+            <p class="muted small">Placing the order holds your seats for {{ HOLD_MINUTES }} minutes. You pay on the next page. Up to {{ max_per_event }} tickets per account for this show.</p>
+            {% else %}
+            <a class="btn btn-big btn-block" href="{{ signin_url }}">Sign in to book</a>
+            <p class="muted small">You need an account to hold seats. <a class="link" href="{{ url_for('signup', next=url_for('event_page', event_id=ev.event_id)) }}">Create one</a>, it takes a minute.</p>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  </div>
 </main>
-{% if map_tpl %}
-<script>
-(function () {
-  const ZONES = {{ zones|tojson }};
-  const info = {};
-  ZONES.forEach((z) => { info[z.key] = z; });
-  const radios = document.querySelectorAll('input[name="zone"]');
-  const shapes = document.querySelectorAll('.map .zn');
-  function sync() {
-    const picked = document.querySelector('input[name="zone"]:checked');
-    shapes.forEach((g) => g.classList.toggle('sel', !!picked && g.dataset.zone === picked.value));
-  }
-  shapes.forEach((g) => {
-    const z = info[g.dataset.zone];
-    if (!z || z.max_qty === 0) { g.classList.add('off'); }
-    g.setAttribute('tabindex', z && z.max_qty > 0 ? '0' : '-1');
-    g.setAttribute('role', 'radio');
-    g.setAttribute('aria-label', z ? z.label + ', ' + z.note : g.dataset.zone);
-    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-    title.textContent = z ? z.label + ' · ' + z.note : g.dataset.zone;
-    g.prepend(title);
-    function choose() {
-      if (!z || z.max_qty === 0) return;
-      const r = document.querySelector('input[name="zone"][value="' + g.dataset.zone + '"]');
-      if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
-    }
-    g.addEventListener('click', choose);
-    g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); choose(); } });
-  });
-  radios.forEach((r) => r.addEventListener('change', sync));
-  sync();
-})();
-</script>
-{% endif %}
 {% endblock %}

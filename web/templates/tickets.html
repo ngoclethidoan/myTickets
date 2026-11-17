@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}My tickets{% endblock %}
+{% macro ticket_pass(t, first_of_order, past=false) %}
+<article class="tk tk-band pass zone-{{ t.zone|lower }} {{ 'pass-past' if past }}" {% if first_of_order %}id="{{ t.order }}"{% endif %}>
+  <div class="tk-main">
+    <div>
+      <h2>{{ t.event }}</h2>
+      <p class="pass-sub">{% if t.artist %}{{ t.artist }}, {% endif %}{{ t.venue }}</p>
+    </div>
+    <dl class="pass-fields">
+      <div><dt>Date</dt><dd>{{ t.start|dt('%a %d %b %Y') }}</dd></div>
+      <div><dt>Starts</dt><dd>{{ t.start|dt('%H:%M') }}</dd></div>
+      <div><dt>Zone</dt><dd>{{ t.zone_label }}</dd></div>
+      {% if t.standing %}<div><dt>Seat</dt><dd>Free standing</dd></div>
+      {% else %}<div><dt>Row</dt><dd>{{ t.row }}</dd></div><div><dt>Seat</dt><dd>{{ t.number }}</dd></div>{% endif %}
+    </dl>
+    <p class="pass-foot">{{ t.holder }}. Order {{ t.order }}, {{ t.price|vnd }}.</p>
+  </div>
+  <div class="tk-stub">
+    {% if t.qr %}<div class="qr" role="img" aria-label="QR code of this ticket">{{ t.qr }}</div>{% endif %}
+    <span class="code">{{ t.code }}</span>
+  </div>
+</article>
+{% endmacro %}
+{% block content %}
+<main>
+  <div class="wrap wrap-narrow" style="max-width:900px">
+    <div class="page-head row row-end">
+      <div>
+        <h1>My tickets</h1>
+        <p>Show the QR code at the door. A ticket appears here once its order is paid.</p>
+      </div>
+      {% if upcoming %}<button class="btn-ghost no-print" type="button" data-print>Print tickets</button>{% endif %}
+    </div>
+
+    {% set seen = namespace(orders=[]) %}
+    {% for t in upcoming %}
+      {{ ticket_pass(t, t.order not in seen.orders) }}
+      {% set seen.orders = seen.orders + [t.order] %}
+    {% else %}
+    <div class="empty">
+      <h2>No tickets for upcoming shows</h2>
+      <p>A ticket appears here as soon as its order is paid.</p>
+      <div class="row" style="justify-content:center">
+        <a class="btn" href="{{ url_for('home') }}">Find a show</a>
+        <a class="btn-ghost" href="{{ url_for('orders', status='pending') }}">Orders waiting for payment</a>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if past %}
+    <h2 class="section-title">Past shows</h2>
+    {% for t in past %}
+      {{ ticket_pass(t, t.order not in seen.orders, true) }}
+      {% set seen.orders = seen.orders + [t.order] %}
+    {% endfor %}
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

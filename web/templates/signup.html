@@ -1,23 +1,31 @@
 {% extends "auth_base.html" %}
-{% block title %}Sign up · myTickets{% endblock %}
+{% block title %}Create a myTickets account{% endblock %}
 {% block form %}
-<h1>Sign up</h1>
+<h1>Create an account</h1>
 {% if errors %}<ul class="form-error" role="alert">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
 <form method="post" class="stack">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <div class="field"><label for="username">Username</label>
-    <input id="username" name="username" type="text" autocomplete="username" maxlength="50" value="{{ form.username }}" required></div>
-  <div class="field"><label for="password">Password</label>
-    <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required></div>
-  <div class="field"><label for="confirm">Confirm password</label>
-    <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required></div>
+  {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
   <div class="field"><label for="name">Full name</label>
-    <input id="name" name="name" type="text" autocomplete="name" value="{{ form.name }}" required></div>
-  <div class="field"><label for="email">Email</label>
-    <input id="email" name="email" type="email" autocomplete="email" value="{{ form.email }}" required></div>
-  <div class="field"><label for="phone_num">Phone number <span class="muted">(optional)</span></label>
-    <input id="phone_num" name="phone_num" type="tel" autocomplete="tel" value="{{ form.phone_num }}"></div>
-  <button class="btn btn-block" type="submit">Sign up</button>
+    <input id="name" name="name" type="text" autocomplete="name" maxlength="100" value="{{ form.name }}" required autofocus>
+    <span class="hint">Printed on your tickets.</span></div>
+  <div class="field"><label for="username">Username</label>
+    <input id="username" name="username" type="text" autocomplete="username" minlength="3" maxlength="50" pattern="[A-Za-z0-9_.\-]+" value="{{ form.username }}" required>
+    <span class="hint">Letters, digits, dots, dashes and underscores. It cannot be changed later.</span></div>
+  <div class="grid2">
+    <div class="field"><label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" maxlength="100" value="{{ form.email }}" required></div>
+    <div class="field"><label for="phone_num">Phone number, optional</label>
+      <input id="phone_num" name="phone_num" type="tel" autocomplete="tel" maxlength="20" value="{{ form.phone_num }}"></div>
+  </div>
+  <div class="grid2">
+    <div class="field"><label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+      <span class="hint">At least 8 characters.</span></div>
+    <div class="field"><label for="confirm">Password again</label>
+      <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></div>
+  </div>
+  <button class="btn btn-big btn-block" type="submit">Create account</button>
 </form>
-<p class="muted">Already have an account? <a class="hl" href="{{ url_for('signin') }}">Sign in</a></p>
+<p>Already have an account? <a class="link" href="{{ url_for('signin', next=next_url) if next_url else url_for('signin') }}">Sign in</a></p>
 {% endblock %}

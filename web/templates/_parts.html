@@ -1,0 +1,28 @@
+{# Small pieces shared by several pages. Use:  {% import "_parts.html" as parts %}  #}
+
+{# Sale state of a home-page event card (see event_card() in app.py) #}
+{% macro sale_sticker(e) -%}
+  {% if e.state == 'soldout' %}<span class="sticker sticker-soldout">Sold out</span>
+  {% elif e.state == 'soon' %}<span class="sticker sticker-soon">Sales open {{ e.sale|dt('%d %b') }}</span>
+  {% elif e.low %}<span class="sticker sticker-low">Only {{ e.left }} left</span>
+  {% else %}<span class="sticker sticker-open">On sale</span>{% endif %}
+{%- endmacro %}
+
+{# Poster image, or a typeset poster when the event has no image yet #}
+{% macro poster(img, name, artist, tint, sticker='') -%}
+<span class="poster tint-{{ tint }}">
+  {% if img %}<img src="{{ img }}" alt="Poster of {{ name }}" loading="lazy">
+  {% else %}<span class="poster-type" aria-hidden="true"><b>{{ name }}</b><span>{{ artist }}</span></span>{% endif %}
+  {{ sticker }}
+</span>
+{%- endmacro %}
+
+{% macro days_away(days) -%}
+  {% if days <= 0 %}today{% elif days == 1 %}tomorrow{% else %}in {{ days }} days{% endif %}
+{%- endmacro %}
+
+{% macro state_sticker(state) -%}
+  {% if state == 'open' %}<span class="sticker sticker-open">On sale</span>
+  {% elif state == 'soon' %}<span class="sticker sticker-soon">Not on sale yet</span>
+  {% else %}<span class="sticker sticker-ended">Over</span>{% endif %}
+{%- endmacro %}
