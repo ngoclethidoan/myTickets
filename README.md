@@ -167,3 +167,5 @@ The fonts are served from `static/fonts/`, so the pages look the same without an
 - A venue without an entry in `VENUE_ZONES` or without a map file falls back to a plain zone list.
 - The database cannot verify that `p_admin_id` / `p_customer_id` really belongs to the person calling; the web
   app takes it from the signed session.
+###### a friendly note from me
+actually, this is a group project for a course in college. because i kinda disagree with some of my teammate's ideas, i made a version of my own and it turned out to be kinda disappointing but i still make it finished because it's still my idea thought. if you're interested, you can visit our group work here: https://github.com/VinnBe/SIT24_CS311V_MyTickets
